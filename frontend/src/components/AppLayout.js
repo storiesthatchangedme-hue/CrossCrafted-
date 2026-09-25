@@ -1,9 +1,10 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Users, Calendar, User, LogOut, Compass, ShoppingBag, Shield, Plus, Search, Bell, MessageCircle, Heart, Sparkles, Award, HeartHandshake } from 'lucide-react';
+import { Users, Calendar, User, LogOut, Compass, ShoppingBag, Shield, Plus, Search, Bell, MessageCircle, Heart, Sparkles, Award, HeartHandshake, BookOpen, Building2, Store } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '@/lib/api';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 
 const AppLayout = () => {
@@ -69,6 +70,9 @@ const AppLayout = () => {
     { to: '/app/churches', icon: Search, label: 'Churches' },
     { to: '/app/events', icon: Calendar, label: 'Events' },
     { to: '/app/trivia', icon: Award, label: 'Bible Trivia' },
+    { to: '/app/apologetics', icon: BookOpen, label: 'Apologetics' },
+    { to: '/app/list-church', icon: Building2, label: 'List Your Church' },
+    { to: '/app/marketplace', icon: Store, label: 'Marketplace' },
     { to: '/app/notifications', icon: Bell, label: 'Notifications', badge: unreadNotifs },
     { to: '/app/profile', icon: User, label: 'Profile' },
   ];
@@ -102,7 +106,8 @@ const AppLayout = () => {
               crosscrafted
             </h1>
           </Link>
-          <div className="hidden md:flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-3">
+            <LanguageSwitcher />
             <span className="text-sm text-[#94A3B8]" data-testid="user-name-display">{user?.name}</span>
             <button onClick={handleLogout} className="p-2 rounded-xl hover:bg-white/5 transition-colors" data-testid="logout-button">
               <LogOut size={18} strokeWidth={1.8} className="text-[#64748B]" />
@@ -110,6 +115,7 @@ const AppLayout = () => {
           </div>
           {/* Mobile: minimal right side */}
           <div className="md:hidden flex items-center gap-2">
+            <LanguageSwitcher />
             {user?.role === 'admin' && (
               <Link to="/app/admin" data-testid="mobile-admin-link">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/[0.06]">

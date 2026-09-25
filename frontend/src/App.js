@@ -5,6 +5,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Toaster } from "@/components/ui/sonner";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { LanguageProvider } from "@/components/LanguageSwitcher";
 
 import '@/lib/api'; // initialize centralized API client (registers interceptors)
 
@@ -47,6 +48,9 @@ const AdminApprovals = React.lazy(() => import("@/pages/admin/AdminApprovals"));
 const AdminComments = React.lazy(() => import("@/pages/admin/AdminComments"));
 const AdminTrivia = React.lazy(() => import("@/pages/admin/AdminTrivia"));
 const AdminReports = React.lazy(() => import("@/pages/admin/AdminReports"));
+const Apologetics = React.lazy(() => import("@/pages/Apologetics"));
+const ListYourChurch = React.lazy(() => import("@/pages/ListYourChurch"));
+const ListYourBusiness = React.lazy(() => import("@/pages/ListYourBusiness"));
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
 function AppRouter() {
@@ -100,6 +104,9 @@ function AppRouter() {
         <Route path="feed" element={<SocialFeed />} />
         <Route path="explore" element={<Explore />} />
         <Route path="trivia" element={<Trivia />} />
+        <Route path="apologetics" element={<Apologetics />} />
+        <Route path="list-church" element={<ListYourChurch />} />
+        <Route path="marketplace" element={<ListYourBusiness />} />
         <Route path="prayer-wall" element={<PrayerWall />} />
         <Route path="churches" element={<Churches />} />
         <Route path="churches/:churchId" element={<ChurchProfile />} />
@@ -124,7 +131,9 @@ function App() {
       <div className="App">
         <ErrorBoundary>
         <BrowserRouter>
+          <LanguageProvider>
           <AppRouter />
+          </LanguageProvider>
         </BrowserRouter>
         <Toaster position="top-center" />
         </ErrorBoundary>

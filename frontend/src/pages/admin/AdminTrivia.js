@@ -4,9 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   HelpCircle, Search, Plus, Download, Trash2, Edit2, 
   Check, X, AlertTriangle, HelpCircle as HelpIcon, Filter, 
-  TrendingUp, Award, BookOpen, ChevronDown, ChevronUp
+  TrendingUp, Award, BookOpen, ChevronDown, ChevronUp,
+  Upload, FileJson, LayoutGrid
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { QUIZ_LEVELS, QUIZ_CATEGORIES } from '@/data/bibleQuizData';
 
 
 const DIFFICULTY_CONFIGS = {
@@ -35,6 +37,9 @@ export default function AdminTrivia() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [diffFilter, setDiffFilter] = useState('all');
+  const [catFilter, setCatFilter] = useState('all');
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [bulkJson, setBulkJson] = useState('');
   
   // Panels
   const [showAddPanel, setShowAddPanel] = useState(false);
@@ -207,6 +212,53 @@ export default function AdminTrivia() {
     }
   };
 
+  // Export all questions as JSON download
+  const downloadJSON = () => {
+    if (questions.length === 0) {
+      toast.error('No questions available to export');
+      return;
+    }
+    const jsonContent = JSON.stringify(questions, null, 2);
+    const blob = new Blob([jsonContent], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'bible_trivia_questions_export.json');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Exported ${questions.length} questions to JSON!`);
+  };
+
+  // Bulk import from JSON
+  const handleBulkImport = async () => {
+    try {
+      const parsed = JSON.parse(bulkJson);
+      const items = Array.isArray(parsed) ? parsed : [parsed];
+      let imported = 0;
+      for (const item of items) {
+        if (!item.question || !item.options || !item.answer) continue;
+        try {
+          await api.post('/api/admin/trivia', {
+            question: item.question,
+            difficulty: item.difficulty || 'easy',
+            options: item.options,
+            answer: item.answer,
+            explanation: item.explanation || '',
+            category: item.category || 'full_bible',
+          });
+          imported++;
+        } catch (_) {}
+      }
+      toast.success(`Imported ${imported} questions`);
+      setShowBulkImport(false);
+      setBulkJson('');
+      fetchQuestions();
+    } catch (_) {
+      toast.error('Invalid JSON format');
+    }
+  };
+
   // Download all trivia as CSV
   const downloadCSV = () => {
     if (questions.length === 0) {
@@ -254,7 +306,18 @@ export default function AdminTrivia() {
                           (q.explanation && q.explanation.toLowerCase().includes(searchTerm.toLowerCase())) ||
                           q.options.some(o => o.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesDiff = diffFilter === 'all' || q.difficulty === diffFilter;
-    return matchesSearch && matchesDiff;
+    const matchesCat = catFilter === 'all' || q.category === catFilter;
+    return matchesSearch && matchesDiff && matchesCat;
+  });
+
+  // Question counts per level+category
+  const questionCounts = {};
+  QUIZ_LEVELS.forEach(level => {
+    questionCounts[level.id] = {};
+    QUIZ_CATEGORIES.forEach(cat => {
+      questionCounts[level.id][cat.id] = questions.filter(q => q.difficulty === level.id && q.category === cat.id).length;
+    });
+    questionCounts[level.id]._total = questions.filter(q => q.difficulty === level.id).length;
   });
 
   // Calculate difficulty counts
@@ -275,13 +338,27 @@ export default function AdminTrivia() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={downloadCSV}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-bold transition-all duration-200"
           >
             <Download size={14} />
             <span>Export CSV</span>
+          </button>
+          <button
+            onClick={downloadJSON}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 rounded-xl text-xs font-bold transition-all duration-200"
+          >
+            <FileJson size={14} />
+            <span>Export JSON</span>
+          </button>
+          <button
+            onClick={() => setShowBulkImport(!showBulkImport)}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 rounded-xl text-xs font-bold transition-all duration-200"
+          >
+            <Upload size={14} />
+            <span>Bulk Import</span>
           </button>
           <button
             onClick={() => {
@@ -296,23 +373,27 @@ export default function AdminTrivia() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-slate-900/40 border border-white/[0.04] p-4 rounded-2xl flex flex-col justify-between">
-          <span className="text-[10px] uppercase font-black tracking-wider text-slate-400">Total Bank</span>
-          <span className="text-2xl font-black text-white mt-1">{questions.length}</span>
-        </div>
-        <div className="bg-slate-900/40 border border-white/[0.04] p-4 rounded-2xl flex flex-col justify-between">
-          <span className="text-[10px] uppercase font-black tracking-wider text-emerald-400">Easy Level</span>
-          <span className="text-2xl font-black text-emerald-400 mt-1">{easyCount}</span>
-        </div>
-        <div className="bg-slate-900/40 border border-white/[0.04] p-4 rounded-2xl flex flex-col justify-between">
-          <span className="text-[10px] uppercase font-black tracking-wider text-amber-400">Hard Level</span>
-          <span className="text-2xl font-black text-amber-400 mt-1">{hardCount}</span>
-        </div>
-        <div className="bg-slate-900/40 border border-white/[0.04] p-4 rounded-2xl flex flex-col justify-between">
-          <span className="text-[10px] uppercase font-black tracking-wider text-rose-400">Expert Level</span>
-          <span className="text-2xl font-black text-rose-400 mt-1">{expertCount}</span>
+      {/* Stats Cards - Level+Category Matrix */}
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {QUIZ_LEVELS.map(level => (
+            <div key={level.id} className="bg-slate-900/40 border border-white/[0.04] p-4 rounded-2xl">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">{level.icon}</span>
+                <span className="text-[10px] uppercase font-black tracking-wider" style={{ color: level.color }}>{level.label}</span>
+              </div>
+              <span className="text-2xl font-black text-white">{questionCounts[level.id]?._total || 0}</span>
+              <span className="text-[10px] text-slate-500 ml-1">total</span>
+              <div className="mt-2 grid grid-cols-2 gap-1">
+                {QUIZ_CATEGORIES.map(cat => (
+                  <div key={cat.id} className="text-[9px] text-slate-400 flex justify-between">
+                    <span>{cat.abbr}</span>
+                    <span className="font-bold" style={{ color: cat.color }}>{questionCounts[level.id]?.[cat.id] || 0}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -467,21 +548,72 @@ export default function AdminTrivia() {
         )}
       </AnimatePresence>
 
+      {/* Bulk Import Panel */}
+      <AnimatePresence>
+        {showBulkImport && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-slate-900/60 border border-purple-500/20 p-6 rounded-3xl space-y-4">
+              <div className="flex justify-between items-center border-b border-white/[0.05] pb-3 mb-2">
+                <h3 className="text-sm font-black uppercase text-purple-300 tracking-wider flex items-center gap-2">
+                  <Upload size={14} /> Bulk Import Questions (JSON)
+                </h3>
+                <button type="button" onClick={() => setShowBulkImport(false)} className="text-slate-400 hover:text-slate-200">
+                  <X size={16} />
+                </button>
+              </div>
+              <p className="text-xs text-slate-400">Paste a JSON array of question objects. Each must have: question, options (array), answer, difficulty (beginners|intermediate|skilled|expert), category (full_bible|new_testament|old_testament|apologetics), explanation (optional).</p>
+              <textarea
+                value={bulkJson}
+                onChange={(e) => setBulkJson(e.target.value)}
+                className="w-full h-48 px-4 py-3 bg-[#0f172a]/60 border border-white/[0.08] rounded-xl text-xs font-mono focus:border-purple-400/50 outline-none text-white transition-all"
+                placeholder='[\n  {\n    "question": "Who wrote Genesis?",\n    "options": ["Moses", "Abraham", "David", "Paul"],\n    "answer": "Moses",\n    "difficulty": "beginners",\n    "category": "old_testament",\n    "explanation": "Tradition attributes Genesis to Moses."\n  }\n]'
+              />
+              <div className="flex gap-3 justify-end pt-2">
+                <button type="button" onClick={() => { setShowBulkImport(false); setBulkJson(''); }} className="px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 font-bold text-xs uppercase">Cancel</button>
+                <button type="button" onClick={handleBulkImport} className="px-5 py-2 rounded-xl bg-purple-500 hover:bg-purple-600 text-white font-black text-xs uppercase">Import</button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Filter and Search controls */}
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        {/* Pills */}
+        {/* Level Filter Pills */}
         <div className="flex bg-slate-900/60 p-1 rounded-xl border border-white/[0.04] self-start md:self-auto shrink-0">
-          {['all', 'easy', 'hard', 'expert'].map((diff) => (
+          {[{ id: 'all', label: 'All' }, ...QUIZ_LEVELS.map(l => ({ id: l.id, label: `${l.icon} ${l.label}` }))].map(({ id, label }) => (
             <button
-              key={diff}
-              onClick={() => setDiffFilter(diff)}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
-                diffFilter === diff
+              key={id}
+              onClick={() => setDiffFilter(id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
+                diffFilter === id
                   ? 'bg-amber-400 text-slate-950 font-black shadow-md'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {diff}
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Category Filter Pills */}
+        <div className="flex bg-slate-900/60 p-1 rounded-xl border border-white/[0.04] self-start md:self-auto shrink-0">
+          {[{ id: 'all', label: 'All' }, ...QUIZ_CATEGORIES.map(c => ({ id: c.id, label: c.label }))].map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => setCatFilter(id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
+                catFilter === id
+                  ? 'bg-amber-400 text-slate-950 font-black shadow-md'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {label}
             </button>
           ))}
         </div>
