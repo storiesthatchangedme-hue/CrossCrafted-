@@ -1,0 +1,1052 @@
+     1→/**
+     2→ * @module supabase-db
+     3→ * @description Server-side Supabase database layer for CrossCrafted.
+     4→ * Provides a drop-in replacement for the in-memory db operations.
+     5→ * Uses the Supabase service role key for admin-level access.
+     6→ *
+     7→ * All functions return promises. Error handling is the caller's responsibility.
+     8→ */
+     9→
+    10→const { createClient } = require('@supabase/supabase-js');
+    11→const { v4: uuidv4 } = require('uuid');
+    12→
+    13→const SUPABASE_URL = process.env.SUPABASE_URL;
+    14→const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    15→
+    16→if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    17→  console.warn('[Supabase DB] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.');
+    18→  console.warn('[Supabase DB] Falling back to in-memory storage.');
+    19→}
+    20→
+    21→// Admin client bypasses RLS
+    22→const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+    23→  auth: {
+    24→    autoRefreshToken: false,
+    25→    persistSession: false,
+    26→  },
+    27→});
+    28→
+    29→// ═══════════════════════════════════════════════════════════
+    30→// Helper: Resolve ID (legacy string or UUID)
+    31→// ═══════════════════════════════════════════════════════════
+    32→
+    33→async function resolveUserId(idOrLegacy) {
+    34→  // Try UUID first (Supabase primary key)
+    35→  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrLegacy)) {
+    36→    const { data } = await sb.from('users').select('id, legacy_id').eq('id', idOrLegacy).single();
+    37→    return data?.id || null;
+    38→  }
+    39→  // Try legacy_id
+    40→  const { data } = await sb.from('users').select('id, legacy_id').eq('legacy_id', idOrLegacy).single();
+    41→  return data?.id || null;
+    42→}
+    43→
+    44→async function resolveId(table, idOrLegacy) {
+    45→  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrLegacy)) {
+    46→    return idOrLegacy;
+    47→  }
+    48→  const { data } = await sb.from(table).select('id').eq('legacy_id', idOrLegacy).single();
+    49→  return data?.id || idOrLegacy;
+    50→}
+    51→
+    52→function generateLegacyId(prefix) {
+    53→  return `${prefix}_${uuidv4().slice(0, 8)}`;
+    54→}
+    55→
+    56→// ═══════════════════════════════════════════════════════════
+    57→// USERS
+    58→// ═══════════════════════════════════════════════════════════
+    59→
+    60→const users = {
+    61→  async findByEmail(email) {
+    62→    const { data } = await sb.from('users').select('*').ilike('email', email).single();
+    63→    return data || null;
+    64→  },
+    65→
+    66→  async findByUsername(username) {
+    67→    const { data } = await sb.from('users').select('*').ilike('username', username).single();
+    68→    return data || null;
+    69→  },
+    70→
+    71→  async findById(id) {
+    72→    const resolvedId = await resolveId('users', id);
+    73→    const { data } = await sb.from('users').select('*').eq('id', resolvedId).single();
+    74→    return data || null;
+    75→  },
+    76→
+    77→  async findAll(opts = {}) {
+    78→    let query = sb.from('users').select('*');
+    79→    if (opts.role) query = query.eq('role', opts.role);
+    80→    if (opts.status) query = query.eq('status', opts.status);
+    81→    if (opts.search) {
+    82→      query = query.or(`name.ilike.%${opts.search}%,username.ilike.%${opts.search}%,email.ilike.%${opts.search}%`);
+    83→    }
+    84→    if (opts.limit) query = query.limit(opts.limit);
+    85→    if (opts.offset) query = query.range(opts.offset, opts.offset + (opts.limit || 20) - 1);
+    86→    const { data } = await query.order('created_at', { ascending: false });
+    87→    return data || [];
+    88→  },
+    89→
+    90→  async create(userData) {
+    91→    const id = userData.id || uuidv4();
+    92→    const legacyId = userData.legacy_id || userData._id || generateLegacyId('user');
+    93→    const { password_hash, _id, ...safeFields } = userData;
+    94→
+    95→    const insertData = {
+    96→      id,
+    97→      legacy_id: legacyId,
+    98→      ...safeFields,
+    99→    };
+   100→
+   101→    // Map old field names to new schema
+   102→    if (insertData.faith_belief) insertData.denomination = insertData.faith_belief;
+   103→    if (insertData.faith_journey) insertData.faith_journey_status = insertData.faith_journey;
+   104→
+   105→    const { data, error } = await sb.from('users').insert(insertData).select('*').single();
+   106→    if (error) throw error;
+   107→    return { ...data, _id: data.id || legacyId, legacy_id: legacyId };
+   108→  },
+   109→
+   110→  async update(id, updates) {
+   111→    const resolvedId = await resolveId('users', id);
+   112→    const { password_hash, _id, id: __, legacy_id: __l, ...safeUpdates } = updates;
+   113→    const { data, error } = await sb.from('users').update(safeUpdates).eq('id', resolvedId).select('*').single();
+   114→    if (error) throw error;
+   115→    return { ...data, _id: data.id || data.legacy_id };
+   116→  },
+   117→
+   118→  async count() {
+   119→    const { count, error } = await sb.from('users').select('*', { count: 'exact', head: true });
+   120→    return error ? 0 : count || 0;
+   121→  }
+   122→};
+   123→
+   124→// ═══════════════════════════════════════════════════════════
+   125→// POSTS
+   126→// ═══════════════════════════════════════════════════════════
+   127→
+   128→const posts = {
+   129→  async findAll(currentUserId = null) {
+   130→    const { data } = await sb.from('posts').select('*').order('created_at', { ascending: false });
+   131→
+   132→    const enriched = await Promise.all((data || []).map(async (post) => {
+   133→      const author = await users.findById(post.user_id);
+   134→      const likesArr = post.likes || [];
+   135→      return {
+   136→        ...post,
+   137→        _id: post.id || post.legacy_id,
+   138→        user_name: author?.name || post.user_name || '',
+   139→        user_username: author?.username || '',
+   140→        user_image: author?.profile_image || '',
+   141→        is_verified: author?.is_verified || false,
+   142→        likes_count: likesArr.length,
+   143→        comments_count: 0, // Will be fetched from comments table
+   144→        is_liked: currentUserId ? likesArr.includes(currentUserId) : false,
+   145→        is_saved: false,
+   146→      };
+   147→    }));
+   148→
+   149→    // Fetch comment counts
+   150→    for (const post of enriched) {
+   151→      const { count } = await sb.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', post.id);
+   152→      post.comments_count = count || 0;
+   153→    }
+   154→
+   155→    return enriched;
+   156→  },
+   157→
+   158→  async findById(postId) {
+   159→    const resolvedId = await resolveId('posts', postId);
+   160→    const { data } = await sb.from('posts').select('*').eq('id', resolvedId).single();
+   161→    return data || null;
+   162→  },
+   163→
+   164→  async create(postData) {
+   165→    const id = uuidv4();
+   166→    const legacyId = generateLegacyId('post');
+   167→    const { user_id, content_text, image_url, video_url } = postData;
+   168→
+   169→    const { data, error } = await sb.from('posts').insert({
+   170→      id,
+   171→      legacy_id: legacyId,
+   172→      user_id,
+   173→      content_text,
+   174→      image_url: image_url || '',
+   175→      video_url: video_url || '',
+   176→      likes: [],
+   177→    }).select('*').single();
+   178→
+   179→    if (error) throw error;
+   180→    return { ...data, _id: data.id || legacyId };
+   181→  },
+   182→
+   183→  async toggleLike(postId, userId) {
+   184→    const resolvedId = await resolveId('posts', postId);
+   185→    const post = await this.findById(resolvedId);
+   186→    if (!post) return null;
+   187→
+   188→    const likes = post.likes || [];
+   189→    const idx = likes.indexOf(userId);
+   190→
+   191→    if (idx > -1) {
+   192→      likes.splice(idx, 1);
+   193→    } else {
+   194→      likes.push(userId);
+   195→    }
+   196→
+   197→    const { data, error } = await sb.from('posts').update({ likes }).eq('id', resolvedId).select('*').single();
+   198→    if (error) throw error;
+   199→    return { ...data, _id: data.id || data.legacy_id };
+   200→  },
+   201→
+   202→  async savePost(postId, userId) {
+   203→    const resolvedId = await resolveId('users', userId);
+   204→    const user = await users.findById(resolvedId);
+   205→    if (!user) return;
+   206→
+   207→    const saved = user.saved_posts || [];
+   208→    if (!saved.includes(postId)) {
+   209→      saved.push(postId);
+   210→      await users.update(resolvedId, { saved_posts: saved });
+   211→    }
+   212→  },
+   213→
+   214→  async unsavePost(postId, userId) {
+   215→    const resolvedId = await resolveId('users', userId);
+   216→    const user = await users.findById(resolvedId);
+   217→    if (!user) return;
+   218→
+   219→    const saved = (user.saved_posts || []).filter(id => id !== postId);
+   220→    await users.update(resolvedId, { saved_posts: saved });
+   221→  },
+   222→
+   223→  async getSavedPosts(userId) {
+   224→    const user = await users.findById(userId);
+   225→    if (!user) return [];
+   226→    const savedIds = user.saved_posts || [];
+   227→    if (savedIds.length === 0) return [];
+   228→
+   229→    const allPosts = await this.findAll(userId);
+   230→    return allPosts.filter(p => savedIds.includes(p.id) || savedIds.includes(p._id));
+   231→  },
+   232→
+   233→  async getByUser(userId) {
+   234→    const { data } = await sb.from('posts').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+   235→    return (data || []).map(p => ({ ...p, _id: p.id || p.legacy_id }));
+   236→  },
+   237→
+   238→  async delete(postId) {
+   239→    const resolvedId = await resolveId('posts', postId);
+   240→    await sb.from('comments').delete().eq('post_id', resolvedId);
+   241→    const { error } = await sb.from('posts').delete().eq('id', resolvedId);
+   242→    if (error) throw error;
+   243→  }
+   244→};
+   245→
+   246→// ═══════════════════════════════════════════════════════════
+   247→// COMMENTS
+   248→// ═══════════════════════════════════════════════════════════
+   249→
+   250→const comments = {
+   251→  async create(postId, userId, text, userName, userUsername, userImage) {
+   252→    const id = uuidv4();
+   253→    const resolvedPostId = await resolveId('posts', postId);
+   254→
+   255→    const { data, error } = await sb.from('comments').insert({
+   256→      id,
+   257→      post_id: resolvedPostId,
+   258→      user_id: userId,
+   259→      text,
+   260→    }).select('*').single();
+   261→
+   262→    if (error) throw error;
+   263→    return {
+   264→      ...data,
+   265→      id: data.id,
+   266→      user_name: userName,
+   267→      user_username: userUsername,
+   268→      user_image: userImage,
+   269→    };
+   270→  },
+   271→
+   272→  async delete(commentId) {
+   273→    const { error } = await sb.from('comments').delete().eq('id', commentId);
+   274→    if (error) throw error;
+   275→  },
+   276→
+   277→  async deleteByLegacyId(legacyId) {
+   278→    const { data } = await sb.from('comments').select('id').eq('id', legacyId).single();
+   279→    if (data) {
+   280→      await sb.from('comments').delete().eq('id', data.id);
+   281→    }
+   282→  },
+   283→
+   284→  async getByPost(postId) {
+   285→    const resolvedPostId = await resolveId('posts', postId);
+   286→    const { data } = await sb.from('comments').select('*').eq('post_id', resolvedPostId).order('created_at', { ascending: true });
+   287→    return data || [];
+   288→  }
+   289→};
+   290→
+   291→// ═══════════════════════════════════════════════════════════
+   292→// CHURCHES
+   293→// ═══════════════════════════════════════════════════════════
+   294→
+   295→const churches = {
+   296→  async findAll(opts = {}) {
+   297→    let query = sb.from('churches').select('*');
+   298→    if (opts.state) query = query.ilike('state', `%${opts.state}%`);
+   299→    if (opts.language) query = query.contains('languages', opts.language);
+   300→    if (opts.search) {
+   301→      query = query.or(`name.ilike.%${opts.search}%,city.ilike.%${opts.search}%,description.ilike.%${opts.search}%`);
+   302→    }
+   303→    const { data } = await query.order('created_at', { ascending: false });
+   304→    return (data || []).map(c => ({ ...c, _id: c.id || c.legacy_id }));
+   305→  },
+   306→
+   307→  async findById(churchId) {
+   308→    const resolvedId = await resolveId('churches', churchId);
+   309→    const { data } = await sb.from('churches').select('*').eq('id', resolvedId).single();
+   310→    return data || null;
+   311→  },
+   312→
+   313→  async create(churchData) {
+   314→    const id = uuidv4();
+   315→    const legacyId = generateLegacyId('church');
+   316→    const { data, error } = await sb.from('churches').insert({
+   317→      id,
+   318→      legacy_id: legacyId,
+   319→      ...churchData,
+   320→    }).select('*').single();
+   321→    if (error) throw error;
+   322→    return { ...data, _id: data.id || legacyId };
+   323→  },
+   324→
+   325→  async update(churchId, updates) {
+   326→    const resolvedId = await resolveId('churches', churchId);
+   327→    const { data, error } = await sb.from('churches').update(updates).eq('id', resolvedId).select('*').single();
+   328→    if (error) throw error;
+   329→    return { ...data, _id: data.id || data.legacy_id };
+   330→  },
+   331→
+   332→  async delete(churchId) {
+   333→    const resolvedId = await resolveId('churches', churchId);
+   334→    const { error } = await sb.from('churches').delete().eq('id', resolvedId);
+   335→    if (error) throw error;
+   336→  },
+   337→
+   338→  async toggleFollow(churchId, userId, follow = true) {
+   339→    const resolvedId = await resolveId('churches', churchId);
+   340→    const church = await this.findById(resolvedId);
+   341→    if (!church) return;
+   342→
+   343→    const followers = church.followers || [];
+   344→    if (follow) {
+   345→      if (!followers.includes(userId)) followers.push(userId);
+   346→    } else {
+   347→      const idx = followers.indexOf(userId);
+   348→      if (idx > -1) followers.splice(idx, 1);
+   349→    }
+   350→
+   351→    await sb.from('churches').update({ followers }).eq('id', resolvedId);
+   352→  },
+   353→
+   354→  async getByUser(userId) {
+   355→    const { data } = await sb.from('churches').select('*').eq('created_by', userId).single();
+   356→    return data || null;
+   357→  },
+   358→
+   359→  async getPosts(churchId) {
+   360→    const church = await this.findById(churchId);
+   361→    if (!church) return [];
+   362→    return posts.getByUser(church.created_by);
+   363→  },
+   364→
+   365→  async getEvents(churchId) {
+   366→    const resolvedId = await resolveId('churches', churchId);
+   367→    const { data } = await sb.from('events').select('*').eq('church_id', resolvedId).order('date', { ascending: true });
+   368→    return (data || []).map(e => ({ ...e, _id: e.id || e.legacy_id }));
+   369→  }
+   370→};
+   371→
+   372→// ═══════════════════════════════════════════════════════════
+   373→// EVENTS
+   374→// ═══════════════════════════════════════════════════════════
+   375→
+   376→const events = {
+   377→  async findAll(opts = {}) {
+   378→    let query = sb.from('events').select('*');
+   379→    if (opts.state) query = query.ilike('state', `%${opts.state}%`);
+   380→    if (opts.language) query = query.contains('languages', opts.language);
+   381→    if (opts.search) {
+   382→      query = query.or(`title.ilike.%${opts.search}%,location.ilike.%${opts.search}%,description.ilike.%${opts.search}%`);
+   383→    }
+   384→    const { data } = await query.order('date', { ascending: true });
+   385→
+   386→    const results = await Promise.all((data || []).map(async (event) => {
+   387→      const { count: attendeesCount } = await sb.from('event_registrations').select('*', { count: 'exact', head: true }).eq('event_id', event.id);
+   388→      const isRegistered = opts.currentUserId
+   389→        ? !!(await sb.from('event_registrations').select('id').eq('event_id', event.id).eq('user_id', opts.currentUserId).single()).data)
+   390→        : false;
+   391→
+   392→      return {
+   393→        ...event,
+   394→        _id: event.id || event.legacy_id,
+   395→        attendees_count: attendeesCount || 0,
+   396→        is_registered: isRegistered,
+   397→      };
+   398→    }));
+   399→
+   400→    return results;
+   401→  },
+   402→
+   403→  async findById(eventId) {
+   404→    const resolvedId = await resolveId('events', eventId);
+   405→    const { data } = await sb.from('events').select('*').eq('id', resolvedId).single();
+   406→    if (!data) return null;
+   407→
+   408→    const { count: attendeesCount } = await sb.from('event_registrations').select('*', { count: 'exact', head: true }).eq('event_id', resolvedId);
+   409→    const { count: regsCount } = await sb.from('event_registrations').select('*', { count: 'exact', head: true }).eq('event_id', resolvedId);
+   410→
+   411→    return {
+   412→      ...data,
+   413→      _id: data.id || data.legacy_id,
+   414→      attendees_count: attendeesCount || 0,
+   415→    };
+   416→  },
+   417→
+   418→  async create(eventData) {
+   419→    const id = uuidv4();
+   420→    const legacyId = generateLegacyId('event');
+   421→    const { data, error } = await sb.from('events').insert({
+   422→      id,
+   423→      legacy_id: legacyId,
+   424→      ...eventData,
+   425→    }).select('*').single();
+   426→    if (error) throw error;
+   427→    return { ...data, _id: data.id || legacyId };
+   428→  },
+   429→
+   430→  async delete(eventId) {
+   431→    const resolvedId = await resolveId('events', eventId);
+   432→    await sb.from('event_registrations').delete().eq('event_id', resolvedId);
+   433→    const { error } = await sb.from('events').delete().eq('id', resolvedId);
+   434→    if (error) throw error;
+   435→  },
+   436→
+   437→  async register(eventId, userId) {
+   438→    const resolvedId = await resolveId('events', eventId);
+   439→    const { data, error } = await sb.from('event_registrations').insert({
+   440→      user_id: userId,
+   441→      event_id: resolvedId,
+   442→    }).select('*').single();
+   443→    if (error) throw error;
+   444→    return data;
+   445→  },
+   446→
+   447→  async unregister(eventId, userId) {
+   448→    const resolvedId = await resolveId('events', eventId);
+   449→    const { error } = await sb.from('event_registrations').delete()
+   450→      .eq('event_id', resolvedId)
+   451→      .eq('user_id', userId);
+   452→    if (error) throw error;
+   453→  },
+   454→
+   455→  async isRegistered(eventId, userId) {
+   456→    const resolvedId = await resolveId('events', eventId);
+   457→    const { data } = await sb.from('event_registrations').select('id')
+   458→      .eq('event_id', resolvedId)
+   459→      .eq('user_id', userId)
+   460→      .single();
+   461→    return !!data;
+   462→  },
+   463→
+   464→  async getAttendees(eventId) {
+   465→    const resolvedId = await resolveId('events', eventId);
+   466→    const { data } = await sb.from('event_registrations').select('user_id').eq('event_id', resolvedId);
+   467→    const userIds = (data || []).map(r => r.user_id);
+   468→    if (userIds.length === 0) return [];
+   469→
+   470→    const { data: usersData } = await sb.from('users').select('id, name, username, profile_image').in('id', userIds);
+   471→    return usersData || [];
+   472→  }
+   473→};
+   474→
+   475→// ═══════════════════════════════════════════════════════════
+   476→// PRODUCTS / MARKETPLACE
+   477→// ═══════════════════════════════════════════════════════════
+   478→
+   479→const products = {
+   480→  async findAll(opts = {}) {
+   481→    let query = sb.from('marketplace_items').select('*').eq('status', 'active');
+   482→    if (opts.search) {
+   483→      query = query.or(`title.ilike.%${opts.search}%,description.ilike.%${opts.search}%`);
+   484→    }
+   485→    if (opts.category) query = query.eq('category', opts.category);
+   486→    if (opts.city) query = query.ilike('city', `%${opts.city}%`);
+   487→
+   488→    const { data } = await query.order('created_at', { ascending: false });
+   489→
+   490→    return await Promise.all((data || []).map(async (p) => {
+   491→      const creator = await users.findById(p.seller_id);
+   492→      return {
+   493→        ...p,
+   494→        _id: p.id || p.legacy_id,
+   495→        seller_name: creator?.name || p.seller_name || '',
+   496→        seller_username: creator?.username || p.seller_username || '',
+   497→        seller_image: creator?.profile_image || p.seller_image || '',
+   498→        creator_name: creator?.name || '',
+   499→      };
+   500→    }));
+   501→  },
+   502→
+   503→  async findById(productId) {
+   504→    const resolvedId = await resolveId('marketplace_items', productId);
+   505→    const { data } = await sb.from('marketplace_items').select('*').eq('id', resolvedId).single();
+   506→    if (!data) return null;
+   507→
+   508→    const creator = await users.findById(data.seller_id);
+   509→    return {
+   510→      ...data,
+   511→      _id: data.id || data.legacy_id,
+   512→      seller_name: creator?.name || '',
+   513→      seller_username: creator?.username || '',
+   514→      seller_image: creator?.profile_image || '',
+   515→      seller_bio: creator?.bio || '',
+   516→      seller_email: creator?.email || '',
+   517→      seller_created_at: creator?.created_at,
+   518→    };
+   519→  },
+   520→
+   521→  async create(productData) {
+   522→    const id = uuidv4();
+   523→    const legacyId = generateLegacyId('prod');
+   524→    const { data, error } = await sb.from('marketplace_items').insert({
+   525→      id,
+   526→      legacy_id: legacyId,
+   527→      ...productData,
+   528→    }).select('*').single();
+   529→    if (error) throw error;
+   530→    return { ...data, _id: data.id || legacyId };
+   531→  },
+   532→
+   533→  async update(productId, updates) {
+   534→    const resolvedId = await resolveId('marketplace_items', productId);
+   535→    const { data, error } = await sb.from('marketplace_items').update(updates).eq('id', resolvedId).select('*').single();
+   536→    if (error) throw error;
+   537→    return { ...data, _id: data.id || data.legacy_id };
+   538→  },
+   539→
+   540→  async delete(productId) {
+   541→    const resolvedId = await resolveId('marketplace_items', productId);
+   542→    const { error } = await sb.from('marketplace_items').delete().eq('id', resolvedId);
+   543→    if (error) throw error;
+   544→  },
+   545→
+   546→  async getByUser(userId) {
+   547→    const { data } = await sb.from('marketplace_items').select('*').eq('seller_id', userId).order('created_at', { ascending: false });
+   548→    return (data || []).map(p => ({ ...p, _id: p.id || p.legacy_id }));
+   549→  }
+   550→};
+   551→
+   552→// ═══════════════════════════════════════════════════════════
+   553→// PRAYERS
+   554→// ═══════════════════════════════════════════════════════════
+   555→
+   556→const prayers = {
+   557→  async findAll() {
+   558→    const { data } = await sb.from('prayers').select('*').order('created_at', { ascending: false });
+   559→    return await Promise.all((data || []).map(async (p) => {
+   560→      const author = await users.findById(p.user_id);
+   561→      return {
+   562→        ...p,
+   563→        _id: p.id || p.legacy_id,
+   564→        user_name: author?.name || '',
+   565→        user_username: author?.username || '',
+   566→        user_image: author?.profile_image || '',
+   567→      };
+   568→    }));
+   569→  },
+   570→
+   571→  async create(prayerData) {
+   572→    const id = uuidv4();
+   573→    const legacyId = generateLegacyId('prayer');
+   574→    const { data, error } = await sb.from('prayers').insert({
+   575→      id,
+   576→      legacy_id: legacyId,
+   577→      ...prayerData,
+   578→    }).select('*').single();
+   579→    if (error) throw error;
+   580→    return { ...data, _id: data.id || legacyId };
+   581→  },
+   582→
+   583→  async togglePray(prayerId, userId) {
+   584→    const resolvedId = await resolveId('prayers', prayerId);
+   585→    const prayer = await sb.from('prayers').select('*').eq('id', resolvedId).single();
+   586→    if (!prayer.data) return null;
+   587→
+   588→    const prayersUsers = prayer.data.prayers_users || [];
+   589→    const count = prayer.data.praying_count || 0;
+   590→
+   591→    if (!prayersUsers.includes(userId)) {
+   592→      prayersUsers.push(userId);
+   593→      await sb.from('prayers').update({
+   594→        prayers_users: prayersUsers,
+   595→        praying_count: count + 1,
+   596→      }).eq('id', resolvedId);
+   597→    }
+   598→
+   599→    return { ...prayer.data, _id: prayer.data.id || prayer.data.legacy_id, praying_count: count + 1 };
+   600→  },
+   601→
+   602→  async addComment(prayerId, userId, text, userName, userUsername, userImage) {
+   603→    const { data, error } = await sb.from('prayer_comments').insert({
+   604→      prayer_id: prayerId,
+   605→      user_id: userId,
+   606→      text,
+   607→    }).select('*').single();
+   608→    if (error) throw error;
+   609→    return { ...data, user_name: userName, user_username: userUsername, user_image: userImage };
+   610→  },
+   611→
+   612→  async getComments(prayerId) {
+   613→    const resolvedId = await resolveId('prayers', prayerId);
+   614→    const { data } = await sb.from('prayer_comments').select('*').eq('prayer_id', resolvedId).order('created_at', { ascending: true });
+   615→    return data || [];
+   616→  }
+   617→};
+   618→
+   619→// ═══════════════════════════════════════════════════════════
+   620→// NOTIFICATIONS
+   621→// ═══════════════════════════════════════════════════════════
+   622→
+   623→const notifications = {
+   624→  async create({ recipientId, senderId, senderName, senderImage, type, message, refId = '' }) {
+   625→    if (recipientId === senderId) return;
+   626→    const id = uuidv4();
+   627→    const legacyId = generateLegacyId('notif');
+   628→
+   629→    const { error } = await sb.from('notifications').insert({
+   630→      id,
+   631→      legacy_id: legacyId,
+   632→      recipient_id: recipientId,
+   633→      sender_id,
+   634→      sender_name: senderName,
+   635→      sender_image: senderImage || '',
+   636→      type,
+   637→      message,
+   638→      ref_id: refId,
+   639→    });
+   640→    if (error) console.error('[DB] Notification create error:', error.message);
+   641→  },
+   642→
+   643→  async findByUser(userId) {
+   644→    const { data } = await sb.from('notifications').select('*')
+   645→      .eq('recipient_id', userId)
+   646→      .order('created_at', { ascending: false })
+   647→      .limit(50);
+   648→    return (data || []).map(n => ({
+   649→      ...n,
+   650→      _id: n.id || n.legacy_id,
+   651→      sender_id: n.sender_id,
+   652→    }));
+   653→  },
+   654→
+   655→  async getUnreadCount(userId) {
+   656→    const { count, error } = await sb.from('notifications').select('*', { count: 'exact', head: true })
+   657→      .eq('recipient_id', userId)
+   658→      .eq('read', false);
+   659→    return error ? 0 : count || 0;
+   660→  },
+   661→
+   662→  async markAllRead(userId) {
+   663→    const { error } = await sb.from('notifications').update({ read: true })
+   664→      .eq('recipient_id', userId)
+   665→      .eq('read', false);
+   666→    if (error) console.error('[DB] Mark all read error:', error.message);
+   667→  },
+   668→
+   669→  async markRead(notifId) {
+   670→    const { error } = await sb.from('notifications').update({ read: true }).eq('id', notifId);
+   671→    if (error) console.error('[DB] Mark read error:', error.message);
+   672→  }
+   673→};
+   674→
+   675→// ═══════════════════════════════════════════════════════════
+   676→// CONVERSATIONS & MESSAGES
+   677→// ═══════════════════════════════════════════════════════════
+   678→
+   679→const conversations = {
+   680→  async findByUser(userId) {
+   681→    const { data: participants } = await sb.from('conversation_participants')
+   682→      .select('conversation_id')
+   683→      .eq('user_id', userId);
+   684→
+   685→    if (!participants || participants.length === 0) return [];
+   686→
+   687→    const convoIds = participants.map(p => p.conversation_id);
+   688→    const results = [];
+   689→
+   690→    for (const convoId of convoIds) {
+   691→      const { data: parts } = await sb.from('conversation_participants')
+   692→        .select('user_id')
+   693→        .eq('conversation_id', convoId);
+   694→
+   695→      const otherUserId = parts?.find(p => p.user_id !== userId)?.user_id;
+   696→      if (!otherUserId) continue;
+   697→
+   698→      const other = await users.findById(otherUserId);
+   699→      const { data: lastMsg } = await sb.from('messages')
+   700→        .select('*')
+   701→        .eq('conversation_id', convoId)
+   702→        .order('created_at', { ascending: false })
+   703→        .limit(1)
+   704→        .single();
+   705→
+   706→      const unreadCount = await sb.from('messages')
+   707→        .select('*', { count: 'exact', head: true })
+   708→        .eq('conversation_id', convoId)
+   709→        .eq('is_read', false)
+   710→        .neq('sender_id', userId);
+   711→
+   712→      results.push({
+   713→        _id: convoId,
+   714→        other_user: other ? {
+   715→          _id: other.id,
+   716→          name: other.name,
+   717→          username: other.username,
+   718→          profile_image: other.profile_image,
+   719→          is_verified: other.is_verified,
+   720→        } : null,
+   721→        last_message: lastMsg?.content || '',
+   722→        last_message_at: lastMsg?.created_at || '',
+   723→        unread_count: unreadCount.count || 0,
+   724→      });
+   725→    }
+   726→
+   727→    results.sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
+   728→    return results;
+   729→  },
+   730→
+   731→  async findOrCreate(userId, otherUserId) {
+   732→    // Check existing
+   733→    const { data: myConvos } = await sb.from('conversation_participants')
+   734→      .select('conversation_id')
+   735→      .eq('user_id', userId);
+   736→
+   737→    for (const { conversation_id } of myConvos || []) {
+   738→      const { data: parts } = await sb.from('conversation_participants')
+   739→        .select('user_id')
+   740→        .eq('conversation_id', conversation_id);
+   741→
+   742→      if (parts?.some(p => p.user_id === otherUserId)) {
+   743→        return { conversation_id, isNew: false };
+   744→      }
+   745→    }
+   746→
+   747→    // Create new
+   748→    const { data, error } = await sb.from('conversations').insert({}).select('id').single();
+   749→    if (error) throw error;
+   750→
+   751→    await sb.from('conversation_participants').insert([
+   752→      { conversation_id: data.id, user_id: userId },
+   753→      { conversation_id: data.id, user_id: otherUserId },
+   754→    ]);
+   755→
+   756→    return { conversation_id: data.id, isNew: true };
+   757→  },
+   758→
+   759→  async getMessages(convoId) {
+   760→    const { data } = await sb.from('messages')
+   761→      .select('*')
+   762→      .eq('conversation_id', convoId)
+   763→      .order('created_at', { ascending: true });
+   764→    return (data || []).map(m => ({
+   765→      ...m,
+   766→      _id: m.id,
+   767→    }));
+   768→  },
+   769→
+   770→  async sendMessage(convoId, senderId, content, messageType = 'text', imageUrl = '') {
+   771→    const { data, error } = await sb.from('messages').insert({
+   772→      conversation_id: convoId,
+   773→      sender_id: senderId,
+   774→      content,
+   775→      message_type: messageType,
+   776→      image_url: imageUrl,
+   777→    }).select('*').single();
+   778→    if (error) throw error;
+   779→    return data;
+   780→  },
+   781→
+   782→  async getUnreadCount(userId) {
+   783→    const { data: participants } = await sb.from('conversation_participants')
+   784→      .select('conversation_id')
+   785→      .eq('user_id', userId);
+   786→
+   787→    if (!participants || participants.length === 0) return 0;
+   788→
+   789→    const convoIds = participants.map(p => p.conversation_id);
+   790→    let total = 0;
+   791→    for (const cid of convoIds) {
+   792→      const { count } = await sb.from('messages')
+   793→        .select('*', { count: 'exact', head: true })
+   794→        .eq('conversation_id', cid)
+   795→        .eq('is_read', false)
+   796→        .neq('sender_id', userId);
+   797→      total += count || 0;
+   798→    }
+   799→    return total;
+   800→  }
+   801→};
+   802→
+   803→// ═══════════════════════════════════════════════════════════
+   804→// TRIVIA
+   805→// ═══════════════════════════════════════════════════════════
+   806→
+   807→const trivia = {
+   808→  async getQuestions(difficulty) {
+   809→    let query = sb.from('trivia_questions').select('*');
+   810→    if (difficulty) query = query.eq('difficulty', difficulty);
+   811→    const { data } = await query.order('created_at', { ascending: true });
+   812→    return (data || []).map(q => ({ ...q, _id: q.id || q.legacy_id }));
+   813→  },
+   814→
+   815→  async submitScore(userId, difficulty, score, total, timeTaken) {
+   816→    const { error } = await sb.from('trivia_scores').insert({
+   817→      user_id: userId,
+   818→      difficulty,
+   819→      score,
+   820→      total_questions: total,
+   821→      time_taken: timeTaken,
+   822→    });
+   823→    if (error) console.error('[DB] Trivia score error:', error.message);
+   824→  },
+   825→
+   826→  async getLeaderboard() {
+   827→    const { data } = await sb.from('trivia_scores').select('*')
+   828→      .order('score', { ascending: false })
+   829→      .limit(20);
+   830→    return data || [];
+   831→  },
+   832→
+   833→  async createQuestion(questionData) {
+   834→    const id = uuidv4();
+   835→    const legacyId = generateLegacyId('q');
+   836→    const { data, error } = await sb.from('trivia_questions').insert({
+   837→      id,
+   838→      legacy_id: legacyId,
+   839→      ...questionData,
+   840→    }).select('*').single();
+   841→    if (error) throw error;
+   842→    return { ...data, _id: data.id || legacyId };
+   843→  },
+   844→
+   845→  async updateQuestion(questionId, updates) {
+   846→    const resolvedId = await resolveId('trivia_questions', questionId);
+   847→    const { data, error } = await sb.from('trivia_questions').update(updates).eq('id', resolvedId).select('*').single();
+   848→    if (error) throw error;
+   849→    return data;
+   850→  },
+   851→
+   852→  async deleteQuestion(questionId) {
+   853→    const resolvedId = await resolveId('trivia_questions', questionId);
+   854→    const { error } = await sb.from('trivia_questions').delete().eq('id', resolvedId);
+   855→    if (error) throw error;
+   856→  },
+   857→
+   858→  async count() {
+   859→    const { count } = await sb.from('trivia_questions').select('*', { count: 'exact', head: true });
+   860→    return count || 0;
+   861→  }
+   862→};
+   863→
+   864→// ═══════════════════════════════════════════════════════════
+   865→// REPORTS & ADMIN
+   866→// ═══════════════════════════════════════════════════════════
+   867→
+   868→const reports = {
+   869→  async create(reportData) {
+   870→    const { data, error } = await sb.from('reports').insert({
+   871→      legacy_id: generateLegacyId('report'),
+   872→      ...reportData,
+   873→    }).select('*').single();
+   874→    if (error) throw error;
+   875→    return { ...data, _id: data.id || data.legacy_id };
+   876→  },
+   877→
+   878→  async findAll() {
+   879→    const { data } = await sb.from('reports').select('*').order('created_at', { ascending: false });
+   880→    return (data || []).map(r => ({ ...r, _id: r.id || r.legacy_id }));
+   881→  },
+   882→
+   883→  async resolve(reportId) {
+   884→    const resolvedId = await resolveId('reports', reportId);
+   885→    const { error } = await sb.from('reports').update({ status: 'resolved' }).eq('id', resolvedId);
+   886→    if (error) throw error;
+   887→  }
+   888→};
+   889→
+   890→const adminLogs = {
+   891→  async create(logData) {
+   892→    const { error } = await sb.from('admin_logs').insert(logData);
+   893→    if (error) console.error('[DB] Admin log error:', error.message);
+   894→  },
+   895→
+   896→  async findAll(limit = 100) {
+   897→    const { data } = await sb.from('admin_logs').select('*')
+   898→      .order('timestamp', { ascending: false })
+   899→      .limit(limit);
+   900→    return data || [];
+   901→  }
+   902→};
+   903→
+   904→// ═══════════════════════════════════════════════════════════
+   905→// SEARCHES & BLOCKS
+   906→// ═══════════════════════════════════════════════════════════
+   907→
+   908→const search = {
+   909→  async global(query, limit = 10) {
+   910→    const { data: usersData } = await sb.from('users').select('id, legacy_id, name, username, profile_image, bio, role, is_verified, city, state')
+   911→      .or(`name.ilike.%${query}%,username.ilike.%${query}%`)
+   912→      .limit(limit);
+   913→
+   914→    return (usersData || []).map(u => ({
+   915→      ...u,
+   916→      _id: u.id || u.legacy_id,
+   917→    }));
+   918→  },
+   919→
+   920→  async saveRecent(userId, queryText) {
+   921→    const { error } = await sb.from('recent_searches').insert({
+   922→      user_id: userId,
+   923→      query: queryText,
+   924→    });
+   925→    if (error) console.error('[DB] Save search error:', error.message);
+   926→  },
+   927→
+   928→  async getRecent(userId) {
+   929→    const { data } = await sb.from('recent_searches').select('*')
+   930→      .eq('user_id', userId)
+   931→      .order('created_at', { ascending: false })
+   932→      .limit(10);
+   933→    return data || [];
+   934→  },
+   935→
+   936→  async clearRecent(userId) {
+   937→    const { error } = await sb.from('recent_searches').delete().eq('user_id', userId);
+   938→    if (error) console.error('[DB] Clear searches error:', error.message);
+   939→  }
+   940→};
+   941→
+   942→const blocks = {
+   943→  async block(blockerId, blockedId) {
+   944→    const { error } = await sb.from('user_blocks').insert({
+   945→      blocker_id: blockerId,
+   946→      blocked_id: blockedId,
+   947→    });
+   948→    if (error) console.error('[DB] Block error:', error.message);
+   949→  },
+   950→
+   951→  async unblock(blockerId, blockedId) {
+   952→    const { error } = await sb.from('user_blocks').delete()
+   953→      .eq('blocker_id', blockerId)
+   954→      .eq('blocked_id', blockedId);
+   955→    if (error) console.error('[DB] Unblock error:', error.message);
+   956→  },
+   957→
+   958→  async isBlocked(userId, otherId) {
+   959→    const { data } = await sb.from('user_blocks').select('id')
+   960→      .eq('blocker_id', userId)
+   961→      .eq('blocked_id', otherId)
+   962→      .single();
+   963→    return !!data;
+   964→  }
+   965→};
+   966→
+   967→// ═══════════════════════════════════════════════════════════
+   968→// BFF / DATING
+   969→// ═══════════════════════════════════════════════════════════
+   970→
+   971→const bff = {
+   972→  async swipe(swiperId, swipedId, direction) {
+   973→    const { error } = await sb.from('bff_swipes').insert({
+   974→      swiper_id: swiperId,
+   975→      swiped_id: swipedId,
+   976→      direction,
+   977→    });
+   978→    if (error) console.error('[DB] Swipe error:', error.message);
+   979→
+   980→    // Check for mutual like
+   981→    if (direction === 'right') {
+   982→      const { data } = await sb.from('bff_swipes').select('id')
+   983→        .eq('swiper_id', swipedId)
+   984→        .eq('swiped_id', swiperId)
+   985→        .eq('direction', 'right')
+   986→        .single();
+   987→
+   988→      if (data) {
+   989→        await sb.from('bff_connections').insert({
+   990→          user1_id: swiperId,
+   991→          user2_id: swipedId,
+   992→        });
+   993→        return { matched: true };
+   994→      }
+   995→    }
+   996→    return { matched: false };
+   997→  },
+   998→
+   999→  async getConnections(userId) {
+  1000→    const { data } = await sb.from('bff_connections').select('*')
+  1001→      .or(`user1_id.eq.${userId},user2_id.eq.${userId}`)
+  1002→      .order('created_at', { ascending: false });
+  1003→
+  1004→    return (data || []).map(c => ({
+  1005→      ...c,
+  1006→      _id: c.id,
+  1007→      other_user_id: c.user1_id === userId ? c.user2_id : c.user1_id,
+  1008→    }));
+  1009→  },
+  1010→
+  1011→  async getDiscoverUsers(userId, limit = 10) {
+  1012→    // Get users not yet swiped on, excluding self and blocked
+  1013→    const { data: swiped } = await sb.from('bff_swipes').select('swiped_id')
+  1014→      .eq('swiper_id', userId);
+  1015→
+  1016→    const swipedIds = (swiped || []).map(s => s.swiped_id);
+  1017→    swipedIds.push(userId);
+  1018→
+  1019→    const { data } = await sb.from('users').select('id, name, username, profile_image, bio, city, state, denomination, interests, looking_for, age, gender')
+  1020→      .not('id', 'in', `(${swipedIds.join(',')})`)
+  1021→    .neq('status', 'rejected')
+  1022→    .limit(limit);
+  1023→
+  1024→    return (data || []).map(u => ({ ...u, _id: u.id }));
+  1025→  }
+  1026→};
+  1027→
+  1028→// ═══════════════════════════════════════════════════════════
+  1029→// EXPORT
+  1030→// ═══════════════════════════════════════════════════════════
+  1031→
+  1032→module.exports = {
+  1033→  users,
+  1034→  posts,
+  1035→  comments,
+  1036→  churches,
+  1037→  events,
+  1038→  products,
+  1039→  prayers,
+  1040→  notifications,
+  1041→  conversations,
+  1042→  trivia,
+  1043→  reports,
+  1044→  adminLogs,
+  1045→  search,
+  1046→  blocks,
+  1047→  bff,
+  1048→  resolveUserId,
+  1049→  resolveId,
+  1050→  generateLegacyId,
+  1051→  sb, // Expose raw client for special queries
+  1052→};
