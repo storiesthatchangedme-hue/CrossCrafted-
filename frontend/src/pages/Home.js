@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ArrowRight, Heart, Users, Sparkles, MapPin, Check, BookOpen, Coffee, HelpCircle, Shield, 
-  Smile, HeartHandshake, UserCheck, Star, Compass, Calendar, X
+  Smile, HeartHandshake, UserCheck, Star, Compass, Calendar, X, Award, Building2, Store
 } from 'lucide-react';
 import PublicNav from '@/components/PublicNav';
 import PublicFooter from '@/components/PublicFooter';
@@ -100,14 +100,14 @@ export default function Home() {
             transition={{ duration: 0.5, delay: 0.3 }}
             className="flex flex-wrap gap-4 pt-2"
           >
-            <Link to="/register">
+            <Link to="/app/feed">
               <button className="px-8 py-3.5 bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold rounded-2xl text-sm uppercase tracking-wider shadow-lg shadow-[#F39B9B]/20 flex items-center gap-2 transition-all">
-                Find Friends <ArrowRight size={16} strokeWidth={2.5} />
+                Enter App <ArrowRight size={16} strokeWidth={2.5} />
               </button>
             </Link>
-            <Link to="/login">
-              <button className="px-8 py-3.5 border border-white/[0.08] hover:border-white/[0.15] text-[#A09DB1] hover:text-white font-extrabold rounded-2xl text-sm uppercase tracking-wider transition-all bg-white/[0.02]">
-                Open App
+            <Link to="/app/trivia">
+              <button className="px-8 py-3.5 border border-white/[0.08] hover:border-white/[0.15] text-[#A09DB1] hover:text-white font-extrabold rounded-2xl text-sm uppercase tracking-wider transition-all bg-white/[0.02] flex items-center gap-2">
+                <Award size={16} /> Bible Trivia
               </button>
             </Link>
           </motion.div>
@@ -268,6 +268,49 @@ export default function Home() {
               </p>
             </div>
           </div>
+
+          {/* New Features Row */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-10">
+            <Link to="/app/trivia" className="bg-[#1C1929] border border-[#7C3AED]/20 hover:border-[#7C3AED]/40 p-6 rounded-3xl space-y-3 transition-all group">
+              <div className="w-11 h-11 rounded-2xl bg-[#7C3AED]/10 border border-[#7C3AED]/25 flex items-center justify-center">
+                <Award className="text-[#7C3AED]" size={20} />
+              </div>
+              <h3 className="text-base font-bold text-white group-hover:text-[#7C3AED] transition-colors">Bible Trivia</h3>
+              <p className="text-xs text-[#A09DB1] leading-relaxed">
+                Test your Bible knowledge across 4 difficulty levels and 4 categories. Earn points and win prizes!
+              </p>
+            </Link>
+
+            <Link to="/app/apologetics" className="bg-[#1C1929] border border-[#38BDF8]/20 hover:border-[#38BDF8]/40 p-6 rounded-3xl space-y-3 transition-all group">
+              <div className="w-11 h-11 rounded-2xl bg-[#38BDF8]/10 border border-[#38BDF8]/25 flex items-center justify-center">
+                <BookOpen className="text-[#38BDF8]" size={20} />
+              </div>
+              <h3 className="text-base font-bold text-white group-hover:text-[#38BDF8] transition-colors">Apologetics Blog</h3>
+              <p className="text-xs text-[#A09DB1] leading-relaxed">
+                Ask questions, share answers, and defend the faith with biblical and logical reasoning.
+              </p>
+            </Link>
+
+            <Link to="/app/list-church" className="bg-[#1C1929] border border-[#F39B9B]/20 hover:border-[#F39B9B]/40 p-6 rounded-3xl space-y-3 transition-all group">
+              <div className="w-11 h-11 rounded-2xl bg-[#F39B9B]/10 border border-[#F39B9B]/25 flex items-center justify-center">
+                <Building2 className="text-[#F39B9B]" size={20} />
+              </div>
+              <h3 className="text-base font-bold text-white group-hover:text-[#F39B9B] transition-colors">List Your Church</h3>
+              <p className="text-xs text-[#A09DB1] leading-relaxed">
+                Add your church to the directory and help believers find a community near them.
+              </p>
+            </Link>
+
+            <Link to="/app/marketplace" className="bg-[#1C1929] border border-[#9786E3]/20 hover:border-[#9786E3]/40 p-6 rounded-3xl space-y-3 transition-all group">
+              <div className="w-11 h-11 rounded-2xl bg-[#9786E3]/10 border border-[#9786E3]/25 flex items-center justify-center">
+                <Store className="text-[#9786E3]" size={20} />
+              </div>
+              <h3 className="text-base font-bold text-white group-hover:text-[#9786E3] transition-colors">Marketplace</h3>
+              <p className="text-xs text-[#A09DB1] leading-relaxed">
+                List your business or shop & sell items. Connect with buyers via WhatsApp.
+              </p>
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -282,9 +325,9 @@ export default function Home() {
             Find the godly community you've been praying for. Sign up for crosscrafted in less than 2 minutes and start connecting today.
           </p>
           <div className="pt-2">
-            <Link to="/register">
+            <Link to="/app/feed">
               <button className="px-8 py-3.5 bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold rounded-2xl text-xs uppercase tracking-widest shadow-lg transition-all inline-flex items-center gap-2">
-                Join crosscrafted Now
+                Enter crosscrafted Now
               </button>
             </Link>
           </div>
