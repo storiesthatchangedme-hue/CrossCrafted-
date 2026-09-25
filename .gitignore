@@ -1,0 +1,78 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# IDE and editors
+.idea/
+.vscode/
+.claude/
+
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+
+# Next.js
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Production builds
+/build
+dist/
+
+# Environment files — keep .env.example but ignore real .env
+.env
+.env.local
+.env.*.local
+
+# Logs and debug files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# System files
+.DS_Store
+*.pem
+.gitconfig
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Deployment
+.vercel
+
+# Build caches
+.cache/
+
+# Credentials
+*token.json*
+*credentials.json*
+memory/test_credentials.md
+
+# Patch/migration scripts (one-time use, not part of app)
+patch_*.py
+remove_*.py
+fix_*.py
+auth_testing.md
+backend_test.py
+test_result.md
+
+# Test reports (generated, not source)
+test_reports/
+
+# Junk files
+backend/=2.0.0
+*.pack
+
+# One-off server scripts
+serve-build.js
+
+# Firebase config (not used)
+firebase-applet-config.json

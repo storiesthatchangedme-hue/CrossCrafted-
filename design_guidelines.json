@@ -1,0 +1,140 @@
+{
+  "theme": "Light",
+  "archetype": "3 (Pastel & Soft) mixed with Neo-Brutalism",
+  "design_philosophy": {
+    "emotion": "Playful, Energetic, Authentic, and Connected.",
+    "core_concept": "A modern, Gen Z-focused Christian social platform fusing the raw, unfiltered feel of TikTok with the community utility of Eventbrite, styled in a playful neo-brutalist aesthetic with pastel colors and stark black borders.",
+    "layout_strategy": "Mobile-first feed architecture for the app, with bento-box asymmetry for the marketing landing page. High contrast, generous padding, and bold geometric separations."
+  },
+  "colors": {
+    "background": {
+      "main": "#FFFDF7",
+      "description": "Warm off-white (Butter) to avoid clinical pure white."
+    },
+    "primary": {
+      "base": "#FF90E8",
+      "hover": "#FF7AE0",
+      "text": "#0A0A0A",
+      "description": "Bubblegum Pink for primary CTAs and major highlights."
+    },
+    "secondary": {
+      "base": "#B4FF39",
+      "hover": "#9DE82B",
+      "text": "#0A0A0A",
+      "description": "Lime/Neon Green for secondary actions, tags, or event RSVPs."
+    },
+    "accent": {
+      "yellow": "#FFD800",
+      "blue": "#80C4E9",
+      "description": "Cyber Yellow and Soft Blue for alternating card backgrounds in the feed."
+    },
+    "neutral": {
+      "black": "#0A0A0A",
+      "gray": "#E5E5E5",
+      "text_main": "#0A0A0A",
+      "text_muted": "#52525B",
+      "border": "#0A0A0A"
+    },
+    "rules": [
+      "No teal or purple for CTAs.",
+      "Never use pure black (#000000), use Deep Obsidian (#0A0A0A).",
+      "Always pair pastel backgrounds with thick #0A0A0A borders."
+    ]
+  },
+  "typography": {
+    "fonts": {
+      "heading": "'Fredoka', sans-serif",
+      "body": "'DM Sans', sans-serif",
+      "mono": "'Space Mono', monospace"
+    },
+    "scale": {
+      "h1": "text-5xl sm:text-6xl font-bold tracking-tight leading-none",
+      "h2": "text-3xl sm:text-4xl font-bold tracking-tight leading-tight",
+      "h3": "text-2xl font-semibold leading-snug",
+      "h4": "text-xl font-medium",
+      "body": "text-base sm:text-lg leading-relaxed font-medium",
+      "small": "text-sm uppercase tracking-[0.15em] font-bold"
+    },
+    "rules": [
+      "Headings must use tight letter spacing.",
+      "Labels and overlines must be uppercase, tiny, and wide tracking.",
+      "Do NOT use Inter for headings."
+    ]
+  },
+  "surfaces_and_components": {
+    "cards": {
+      "style": "Neo-Brutalist",
+      "classes": "bg-white border-2 border-[#0A0A0A] rounded-xl shadow-[4px_4px_0_0_#0A0A0A] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#0A0A0A]",
+      "usage": "Use for feed testimonies, church profiles, and event listings. Alternate background colors (Pink, Yellow, Blue, Green, White) for different feed items to create a vibrant timeline."
+    },
+    "buttons": {
+      "primary": "bg-[#FF90E8] text-[#0A0A0A] font-bold border-2 border-[#0A0A0A] rounded-full px-6 py-3 shadow-[4px_4px_0_0_#0A0A0A] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#0A0A0A] transition-all",
+      "secondary": "bg-[#B4FF39] text-[#0A0A0A] font-bold border-2 border-[#0A0A0A] rounded-full px-6 py-3 shadow-[4px_4px_0_0_#0A0A0A] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#0A0A0A] transition-all",
+      "outline": "bg-transparent text-[#0A0A0A] font-bold border-2 border-[#0A0A0A] rounded-full px-6 py-3 hover:bg-[#E5E5E5] transition-all"
+    },
+    "inputs": {
+      "classes": "bg-white border-2 border-[#0A0A0A] rounded-lg px-4 py-3 focus:outline-none focus:ring-0 focus:border-[#0A0A0A] shadow-[2px_2px_0_0_#0A0A0A]"
+    },
+    "navigation": {
+      "header": "Sticky top-0 z-50 bg-[#FFFDF7] border-b-2 border-[#0A0A0A] py-4",
+      "mobile_bottom_nav": "Fixed bottom-0 left-0 right-0 z-50 bg-[#FFFDF7] border-t-2 border-[#0A0A0A] flex justify-around items-center py-3 px-6 md:hidden",
+      "desktop_sidebar": "Hidden md:flex flex-col w-64 border-r-2 border-[#0A0A0A] h-screen sticky top-0 bg-[#FFFDF7] p-6"
+    }
+  },
+  "layout_and_spacing": {
+    "spacing_scale": "Tailwind standard, but lean into generous padding (p-6, p-8) inside containers.",
+    "marketing_page": "Use 'Bento' grid (Tetris mode). A mix of large hero blocks and smaller supporting squares with gap-8. High visual tension.",
+    "app_layout": "Mobile-first. The main feed should be constrained to max-w-xl mx-auto on desktop. Sidebars for navigation and suggested churches on desktop.",
+    "rules": [
+      "Grid items must be direct children.",
+      "Images on mobile must not exceed 80vh.",
+      "No centered text on large paragraphs; left-align everything except maybe the hero headline."
+    ]
+  },
+  "media": {
+    "icons": {
+      "library": "lucide-react",
+      "instructions": "Use Lucide React with strokeWidth={2.5} to match the chunky neo-brutalist aesthetic."
+    },
+    "images": {
+      "marketing_hero": {
+        "url": "https://images.unsplash.com/photo-1758272133833-3a2277d426e4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzZ8MHwxfHNlYXJjaHwyfHxkaXZlcnNlJTIweW91bmclMjBwZW9wbGUlMjBzbWlsaW5nJTIwZ2F0aGVyaW5nfGVufDB8fHx8MTc3NTUzMzM4MHww&ixlib=rb-4.1.0&q=85",
+        "description": "Diverse group of friends taking a selfie together - great for the 'community' vibe on the landing page."
+      },
+      "community_gathering": {
+        "url": "https://images.unsplash.com/photo-1760574740271-55e6683afe76?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzZ8MHwxfHNlYXJjaHwxfHxkaXZlcnNlJTIweW91bmclMjBwZW9wbGUlMjBzbWlsaW5nJTIwZ2F0aGVyaW5nfGVufDB8fHx8MTc3NTUzMzM4MHww&ixlib=rb-4.1.0&q=85",
+        "description": "Three smiling young men standing together - use in about/community sections."
+      },
+      "event_worship": {
+        "url": "https://images.unsplash.com/photo-1760421124157-3ee024d3bf00?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MjJ8MHwxfHNlYXJjaHwyfHxjb25jZXJ0JTIwYXVkaWVuY2UlMjBoYW5kcyUyMHVwfGVufDB8fHx8MTc3NTUzMzM4MHww&ixlib=rb-4.1.0&q=85",
+        "description": "Crowd with hands raised - use as thumbnail for event listings (concerts, worship nights)."
+      },
+      "church_profile": {
+        "url": "https://images.unsplash.com/photo-1761477104708-b1c0281e698c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODl8MHwxfHNlYXJjaHwxfHxjaHVyY2glMjBidWlsZGluZyUyMG1vZGVybnxlbnwwfHx8fDE3NzU1MzMzOTZ8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Modern building - use as placeholder for church cover photos."
+      },
+      "user_avatars": [
+        "https://images.unsplash.com/photo-1613002864483-7464b6bd442e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NDh8MHwxfHNlYXJjaHwxfHx5b3VuZyUyMHBlcnNvbiUyMHNtaWxpbmclMjBwb3J0cmFpdHxlbnwwfHx8fDE3NzU1MzMzOTZ8MA&ixlib=rb-4.1.0&q=85",
+        "https://images.unsplash.com/photo-1718895480108-37c0346792ed?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NDh8MHwxfHNlYXJjaHwzfHx5b3VuZyUyMHBlcnNvbiUyMHNtaWxpbmclMjBwb3J0cmFpdHxlbnwwfHx8fDE3NzU1MzMzOTZ8MA&ixlib=rb-4.1.0&q=85"
+      ]
+    },
+    "rules": "Never use generic placeholders. Only use provided URLs."
+  },
+  "motion_and_interactions": {
+    "hover": "Always scale up or translate-x/y to simulate tactile buttons pressing down or popping up.",
+    "feed": "Animate new posts/testimonies entering the feed with a spring animation (framer-motion `type: 'spring', stiffness: 300, damping: 20`).",
+    "marquee": "Use react-fast-marquee on the marketing page to scroll words like 'CONNECT • WORSHIP • SHARE • DISCOVER' in large uppercase font with a thick border stroke."
+  },
+  "testing": {
+    "attributes": "All interactive elements MUST include data-testid attribute in kebab-case format (e.g., data-testid='login-button', data-testid='feed-post-card')."
+  },
+  "instructions_to_main_agent": [
+    "Build a combined platform: Marketing landing page at '/' and the App feed at '/app'.",
+    "Use Framer Motion for entrance animations (stagger children in the feed).",
+    "Customize Shadcn components heavily to remove the default 'Vercel' look—replace subtle borders with thick 2px black borders and sharp shadows.",
+    "Ensure the layout is highly responsive. The app feed should feel native on mobile (bottom nav) but scale elegantly on desktop (sidebar + constrained center feed).",
+    "Use Lucide icons with a thicker stroke to match the typography weight.",
+    "Do NOT use pure black, use #0A0A0A.",
+    "Implement the testimonies feed like a scrolling list of high-contrast cards. Include image/video placeholders using the provided URLs."
+  ]
+}

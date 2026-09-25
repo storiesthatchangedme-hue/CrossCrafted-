@@ -1,0 +1,530 @@
+{
+  "users": [
+    {
+      "_id": "user_admin",
+      "name": "Admin",
+      "username": "admin",
+      "email": "crosscraftedin@gmail.com",
+      "password_hash": "$2a$10$08YCrkvGaf1cvfR9bDShFOPxp7O6Xi0azjAyc5MG2acUF0PrhhoYm",
+      "bio": "Platform Administrator",
+      "profile_image": "",
+      "phone": "+919052681374",
+      "role": "admin",
+      "status": "active",
+      "is_verified": true,
+      "followers": [],
+      "following": [],
+      "saved_posts": [],
+      "created_at": "2026-07-16T08:50:01.525Z"
+    },
+    {
+      "_id": "user_sarah",
+      "name": "Sarah Mitchell",
+      "username": "sarah.faith",
+      "email": "sarah@example.com",
+      "password_hash": "$2a$10$O.Z6jGFpllLH1qNOtUezZ.9h9EEkG8BS5GzV4BTUF5lsmzph2CZ/C",
+      "bio": "Worship leader. Storyteller. Saved by grace. Sharing my testimony one post at a time.",
+      "profile_image": "https://images.unsplash.com/photo-1758598304332-94b40ce7c7b4?w=200&q=80",
+      "role": "worship_leader",
+      "status": "active",
+      "is_verified": true,
+      "completed_safe_intro": true,
+      "followers": [
+        "user_marcus",
+        "user_emily",
+        "user_david"
+      ],
+      "following": [
+        "user_marcus",
+        "user_emily",
+        "user_david"
+      ],
+      "saved_posts": [],
+      "created_at": "2026-06-16T08:50:01.448Z"
+    },
+    {
+      "_id": "user_marcus",
+      "name": "Marcus Johnson",
+      "username": "marcusjay",
+      "email": "marcus@example.com",
+      "password_hash": "$2a$10$O.Z6jGFpllLH1qNOtUezZ.9h9EEkG8BS5GzV4BTUF5lsmzph2CZ/C",
+      "bio": "Found God at 19. Never looked back. Youth pastor at Hillside Church.",
+      "profile_image": "https://images.unsplash.com/photo-1758874574397-e56dfcfc116d?w=200&q=80",
+      "role": "youth_pastor",
+      "status": "active",
+      "is_verified": true,
+      "completed_safe_intro": true,
+      "followers": [
+        "user_sarah",
+        "user_emily",
+        "user_david"
+      ],
+      "following": [
+        "user_sarah",
+        "user_emily",
+        "user_david"
+      ],
+      "saved_posts": [],
+      "created_at": "2026-06-17T08:50:01.448Z"
+    },
+    {
+      "_id": "user_emily",
+      "name": "Emily Rodriguez",
+      "username": "em.restored",
+      "email": "emily@example.com",
+      "password_hash": "$2a$10$O.Z6jGFpllLH1qNOtUezZ.9h9EEkG8BS5GzV4BTUF5lsmzph2CZ/C",
+      "bio": "Anxiety almost won. But God. Sharing my journey to help others find hope.",
+      "profile_image": "https://images.unsplash.com/photo-1758523672333-12a4099a60b0?w=200&q=80",
+      "role": "user",
+      "status": "active",
+      "is_verified": false,
+      "followers": [
+        "user_sarah",
+        "user_marcus",
+        "user_david"
+      ],
+      "following": [
+        "user_sarah",
+        "user_marcus",
+        "user_david"
+      ],
+      "saved_posts": [],
+      "created_at": "2026-06-18T08:50:01.448Z"
+    },
+    {
+      "_id": "user_david",
+      "name": "David Kim",
+      "username": "dk.worship",
+      "email": "david@example.com",
+      "password_hash": "$2a$10$O.Z6jGFpllLH1qNOtUezZ.9h9EEkG8BS5GzV4BTUF5lsmzph2CZ/C",
+      "bio": "Musician. Songwriter. Leading worship since 16. Every song is a prayer.",
+      "profile_image": "https://images.unsplash.com/photo-1758598302784-42d00ce2ba8f?w=200&q=80",
+      "role": "worship_leader",
+      "status": "active",
+      "is_verified": true,
+      "completed_safe_intro": true,
+      "followers": [
+        "user_sarah",
+        "user_marcus",
+        "user_emily"
+      ],
+      "following": [
+        "user_sarah",
+        "user_marcus",
+        "user_emily"
+      ],
+      "saved_posts": [],
+      "created_at": "2026-06-19T08:50:01.448Z"
+    },
+    {
+      "_id": "user_aiden",
+      "name": "Aiden Brooks",
+      "username": "aiden.walks",
+      "email": "aiden@example.com",
+      "password_hash": "$2a$10$O.Z6jGFpllLH1qNOtUezZ.9h9EEkG8BS5GzV4BTUF5lsmzph2CZ/C",
+      "bio": "Seminary student. Coffee addict. Learning to trust God one chapter at a time.",
+      "profile_image": "https://images.unsplash.com/photo-1618517047977-854f5c4b6976?w=200&q=80",
+      "role": "user",
+      "status": "active",
+      "is_verified": false,
+      "followers": [
+        "user_sarah",
+        "user_marcus",
+        "user_emily"
+      ],
+      "following": [
+        "user_sarah",
+        "user_marcus",
+        "user_emily"
+      ],
+      "saved_posts": [],
+      "created_at": "2026-06-20T08:50:01.448Z"
+    },
+    {
+      "_id": "user_jasmine",
+      "name": "Jasmine Carter",
+      "username": "jas.beloved",
+      "email": "jasmine@example.com",
+      "password_hash": "$2a$10$O.Z6jGFpllLH1qNOtUezZ.9h9EEkG8BS5GzV4BTUF5lsmzph2CZ/C",
+      "bio": "Single mom of 2. God's faithfulness is my daily bread. He provides.",
+      "profile_image": "https://images.unsplash.com/photo-1609371497456-3a55a205d5eb?w=200&q=80",
+      "role": "user",
+      "status": "active",
+      "is_verified": false,
+      "followers": [
+        "user_sarah",
+        "user_marcus",
+        "user_emily"
+      ],
+      "following": [
+        "user_sarah",
+        "user_marcus",
+        "user_emily"
+      ],
+      "saved_posts": [],
+      "created_at": "2026-06-21T08:50:01.448Z"
+    },
+    {
+      "_id": "user_noah",
+      "name": "Noah Parker",
+      "username": "noah.redeemed",
+      "email": "noah@example.com",
+      "password_hash": "$2a$10$O.Z6jGFpllLH1qNOtUezZ.9h9EEkG8BS5GzV4BTUF5lsmzph2CZ/C",
+      "bio": "Former addict. 4 years clean through Christ. My story isn't pretty but it's real.",
+      "profile_image": "https://images.unsplash.com/photo-1618593706014-06782cd3bb3b?w=200&q=80",
+      "role": "user",
+      "status": "active",
+      "is_verified": true,
+      "completed_safe_intro": true,
+      "followers": [
+        "user_sarah",
+        "user_marcus",
+        "user_emily"
+      ],
+      "following": [
+        "user_sarah",
+        "user_marcus",
+        "user_emily"
+      ],
+      "saved_posts": [],
+      "created_at": "2026-06-22T08:50:01.448Z"
+    },
+    {
+      "_id": "user_olivia",
+      "name": "Olivia Chen",
+      "username": "liv.gracefully",
+      "email": "olivia@example.com",
+      "password_hash": "$2a$10$O.Z6jGFpllLH1qNOtUezZ.9h9EEkG8BS5GzV4BTUF5lsmzph2CZ/C",
+      "bio": "First-gen believer. Navigating faith in a family that doesn't understand. But God is faithful.",
+      "profile_image": "https://images.unsplash.com/photo-1582070595814-fe36a8d39532?w=200&q=80",
+      "role": "user",
+      "status": "active",
+      "is_verified": false,
+      "followers": [
+        "user_sarah",
+        "user_marcus",
+        "user_emily"
+      ],
+      "following": [
+        "user_sarah",
+        "user_marcus",
+        "user_emily"
+      ],
+      "saved_posts": [],
+      "created_at": "2026-06-23T08:50:01.448Z"
+    },
+    {
+      "_id": "user_ef0f9279-af4c-4aa6-8401-53833cc45df4",
+      "email": "test@example.com",
+      "username": "testuser3",
+      "password_hash": "$2a$10$0wK56gWlMhErLduhvmyvJuC.MtaruH8KZoTALCamt4B4vTA7Be3BW",
+      "name": "Test",
+      "bio": "",
+      "profile_image": "",
+      "phone": "",
+      "role": "user",
+      "status": "active",
+      "is_verified": false,
+      "followers": [],
+      "following": [],
+      "saved_posts": [],
+      "state": "",
+      "city": "",
+      "languages": [],
+      "faith_belief": "",
+      "faith_journey": "",
+      "church_member": "",
+      "created_at": "2026-07-16T08:54:54.380Z"
+    }
+  ],
+  "posts": [
+    {
+      "_id": "post_1",
+      "user_id": "user_sarah",
+      "user_name": "Sarah Mitchell",
+      "user_username": "sarah.faith",
+      "user_image": "https://images.unsplash.com/photo-1758598304332-94b40ce7c7b4?w=200&q=80",
+      "content_text": "Three years ago today I was sitting in a hospital bed wondering if God even cared. Today I'm leading worship for 300 people. He didn't just hear my prayer — He answered it beyond anything I imagined.",
+      "image_url": "https://images.unsplash.com/photo-1507692049790-de58290a4334?w=800&q=80",
+      "video_url": "",
+      "likes": [
+        "user_marcus",
+        "user_emily",
+        "user_david"
+      ],
+      "comments": [
+        {
+          "id": "comment_1_1",
+          "user_id": "user_marcus",
+          "user_name": "Marcus Johnson",
+          "user_username": "marcusjay",
+          "text": "Incredible testimony, Sarah! God is so good!",
+          "created_at": "2026-07-16T06:56:01.525Z"
+        }
+      ],
+      "created_at": "2026-07-16T06:50:01.525Z"
+    },
+    {
+      "_id": "post_2",
+      "user_id": "user_emily",
+      "user_name": "Emily Rodriguez",
+      "user_username": "em.restored",
+      "user_image": "https://images.unsplash.com/photo-1758523672333-12a4099a60b0?w=200&q=80",
+      "content_text": "I used to have panic attacks every single day. Couldn't leave my apartment. Couldn't hold a job. Then someone invited me to church and everything changed. Not overnight — but step by step, God walked me out of that darkness.",
+      "image_url": "",
+      "video_url": "",
+      "likes": [
+        "user_sarah",
+        "user_jasmine"
+      ],
+      "comments": [
+        {
+          "id": "comment_2_1",
+          "user_id": "user_jasmine",
+          "user_name": "Jasmine Carter",
+          "user_username": "jas.beloved",
+          "text": "Thank you for sharing your heart Emily, this gives me so much hope today.",
+          "created_at": "2026-07-16T01:50:01.525Z"
+        }
+      ],
+      "created_at": "2026-07-16T00:50:01.525Z"
+    },
+    {
+      "_id": "post_3",
+      "user_id": "user_marcus",
+      "user_name": "Marcus Johnson",
+      "user_username": "marcusjay",
+      "user_image": "https://images.unsplash.com/photo-1758874574397-e56dfcfc116d?w=200&q=80",
+      "content_text": "Youth group tonight was WILD. 12 kids gave their lives to Jesus. I'm literally crying typing this. God is moving in this generation and I'm here for it.",
+      "image_url": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800&q=80",
+      "video_url": "",
+      "likes": [
+        "user_noah",
+        "user_olivia",
+        "user_david",
+        "user_aiden"
+      ],
+      "comments": [],
+      "created_at": "2026-07-16T03:50:01.525Z"
+    }
+  ],
+  "churches": [
+    {
+      "_id": "church_hillside",
+      "name": "Hillside Community Church",
+      "location": "Austin, TX",
+      "state": "TX",
+      "city": "Austin",
+      "description": "A Christ-centered, multigenerational community rooted in worship, the Word, and real relationships. Everyone has a place here.",
+      "service_times": "Sun 9:00 AM & 11:00 AM | Wed 7:00 PM",
+      "cover_image": "https://images.unsplash.com/photo-1760367120345-35a4bbadf3cf?w=1000&q=80",
+      "languages": [
+        "English",
+        "Spanish"
+      ],
+      "created_by": "user_marcus",
+      "followers": [
+        "user_sarah",
+        "user_emily"
+      ],
+      "status": "verified",
+      "created_at": "2026-06-26T08:50:01.525Z"
+    },
+    {
+      "_id": "church_grace",
+      "name": "Grace City Fellowship",
+      "location": "Nashville, TN",
+      "state": "TN",
+      "city": "Nashville",
+      "description": "Where messy people meet a perfect God. We don't do religious performance — we do real life, real faith, real community.",
+      "service_times": "Sun 10:00 AM & 6:00 PM",
+      "cover_image": "https://images.unsplash.com/photo-1762013728525-4e093240ae7b?w=1000&q=80",
+      "languages": [
+        "English"
+      ],
+      "created_by": "user_sarah",
+      "followers": [
+        "user_marcus",
+        "user_david"
+      ],
+      "status": "approved",
+      "created_at": "2026-06-27T08:50:01.525Z"
+    },
+    {
+      "_id": "church_gathering",
+      "name": "The Gathering LA",
+      "location": "Los Angeles, CA",
+      "state": "CA",
+      "city": "Los Angeles",
+      "description": "A movement of young believers in the heart of LA. Worship. Discipleship. Justice. We exist to make Jesus famous in our city.",
+      "service_times": "Sun 11:00 AM | Thu 7:30 PM",
+      "cover_image": "https://images.unsplash.com/photo-1760367120244-8db5e65191a4?w=1000&q=80",
+      "languages": [
+        "English",
+        "Korean"
+      ],
+      "created_by": "user_david",
+      "followers": [
+        "user_olivia",
+        "user_aiden"
+      ],
+      "status": "approved",
+      "created_at": "2026-06-28T08:50:01.525Z"
+    }
+  ],
+  "events": [
+    {
+      "_id": "event_youth_night",
+      "title": "Citywide Youth Revival",
+      "description": "Join us for an unforgettable night of worship, dynamic teaching, and community as youth groups from across the city gather under one roof to seek God.",
+      "date": "2026-07-31T19:00:00",
+      "location": "Hillside Community Church (Main Sanctuary)",
+      "price": 0,
+      "cover_image": "https://images.unsplash.com/photo-1760367120345-2b96c53de838?w=1000&q=80",
+      "church_id": "church_hillside",
+      "church_name": "Hillside Community Church",
+      "state": "TX",
+      "city": "Austin",
+      "languages": [
+        "English"
+      ],
+      "created_by": "user_marcus",
+      "created_at": "2026-07-06T08:50:01.525Z"
+    },
+    {
+      "_id": "event_worship_concert",
+      "title": "Night of Worship & Prayer",
+      "description": "An acoustic evening dedicated to seeking the Lord through song, scripture readings, and active intercessory prayer. Coffee and fellowship to follow.",
+      "date": "2026-08-10T18:30:00",
+      "location": "Grace City Fellowship",
+      "price": 10,
+      "cover_image": "https://images.unsplash.com/photo-1507692049790-de58290a4334?w=1000&q=80",
+      "church_id": "church_grace",
+      "church_name": "Grace City Fellowship",
+      "state": "TN",
+      "city": "Nashville",
+      "languages": [
+        "English"
+      ],
+      "created_by": "user_sarah",
+      "created_at": "2026-07-08T08:50:01.525Z"
+    }
+  ],
+  "event_registrations": [
+    {
+      "id": "reg_1",
+      "user_id": "user_emily",
+      "event_id": "event_youth_night",
+      "registered_at": "2026-07-16T08:50:01.525Z"
+    },
+    {
+      "id": "reg_2",
+      "user_id": "user_david",
+      "event_id": "event_youth_night",
+      "registered_at": "2026-07-16T08:50:01.525Z"
+    }
+  ],
+  "products": [
+    {
+      "_id": "prod_bible_cover",
+      "title": "Handcrafted Leather Bible Cover",
+      "description": "Genuine full-grain leather cover meticulously stitched to protect your scriptures. Fits standard study Bibles. Features an embossed cross on the front.",
+      "price": 34.99,
+      "image": "https://images.unsplash.com/photo-1504052434569-70ad5836ab65?w=500&q=80",
+      "created_by": "user_noah",
+      "created_at": "2026-07-11T08:50:01.525Z"
+    },
+    {
+      "_id": "prod_prayer_journal",
+      "title": "Daily Grace Prayer Journal",
+      "description": "A 120-page linen-wrapped guided journal featuring daily scripture prompts, prayer requests sections, and gratitude tracking blocks.",
+      "price": 18.5,
+      "image": "https://images.unsplash.com/photo-1758598302784-42d00ce2ba8f?w=500&q=80",
+      "created_by": "user_sarah",
+      "created_at": "2026-07-12T08:50:01.525Z"
+    }
+  ],
+  "recent_searches": [],
+  "notifications": [],
+  "conversations": [],
+  "messages": [],
+  "admin_logs": [],
+  "login_attempts": [],
+  "prayers": [
+    {
+      "_id": "prayer_1",
+      "user_id": "user_sarah",
+      "user_name": "Sarah Mitchell",
+      "user_username": "sarah.faith",
+      "user_image": "https://images.unsplash.com/photo-1758598304332-94b40ce7c7b4?w=200&q=80",
+      "category": "Thanksgiving",
+      "title": "Worship Night Praises & Unity",
+      "content": "Praise God! We are organizing a multi-church worship night next month! Please pray for unity among the youth groups, for the musicians, and above all, that many souls find comfort and salvation through Jesus Christ. May the Holy Spirit guide every lyric and moment.",
+      "praying_count": 5,
+      "prayers_users": [
+        "user_marcus",
+        "user_emily",
+        "user_david"
+      ],
+      "comments": [
+        {
+          "_id": "comment_p1_1",
+          "user_id": "user_marcus",
+          "user_name": "Marcus Johnson",
+          "user_username": "marcusjay",
+          "user_image": "https://images.unsplash.com/photo-1758874574397-e56dfcfc116d?w=200&q=80",
+          "text": "Amen! I will be there and am praying for a powerful evening of devotion. \"Where two or three are gathered in my name...\"",
+          "created_at": "2026-07-16T06:50:01.525Z"
+        }
+      ],
+      "created_at": "2026-07-15T08:50:01.526Z"
+    },
+    {
+      "_id": "prayer_2",
+      "user_id": "user_emily",
+      "user_name": "Emily Watson",
+      "user_username": "emily.grace",
+      "user_image": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&q=80",
+      "category": "Healing",
+      "title": "Grandmother Heart Surgery Recovery",
+      "content": "My precious grandmother, Sarah Senior, is undergoing bypass surgery this Wednesday. She has been a pillar of prayer in our family for 50 years. Please stand with us for perfect execution by the surgical team, peace of mind for her, and a swift recovery. We know God is the Ultimate Physician!",
+      "praying_count": 7,
+      "prayers_users": [
+        "user_sarah",
+        "user_marcus",
+        "user_aiden"
+      ],
+      "comments": [
+        {
+          "_id": "comment_p2_1",
+          "user_id": "user_sarah",
+          "user_name": "Sarah Mitchell",
+          "user_username": "sarah.faith",
+          "user_image": "https://images.unsplash.com/photo-1758598304332-94b40ce7c7b4?w=200&q=80",
+          "text": "Lifting up grandmother Sarah Senior in prayer right now! Sending love and faith to your family.",
+          "created_at": "2026-07-16T03:50:01.526Z"
+        }
+      ],
+      "created_at": "2026-07-15T20:50:01.526Z"
+    },
+    {
+      "_id": "prayer_3",
+      "user_id": "user_marcus",
+      "user_name": "Marcus Johnson",
+      "user_username": "marcusjay",
+      "user_image": "https://images.unsplash.com/photo-1758874574397-e56dfcfc116d?w=200&q=80",
+      "category": "Guidance",
+      "title": "Career & Calling Transition",
+      "content": "I am currently at a crossroads between staying in my current tech role or pursuing full-time ministry in media production. I want to walk in obedience to His call. Please pray for clarity, wisdom, and that I may trust Proverbs 3:5-6 with all my heart.",
+      "praying_count": 3,
+      "prayers_users": [
+        "user_sarah",
+        "user_emily"
+      ],
+      "comments": [],
+      "created_at": "2026-07-16T02:50:01.526Z"
+    }
+  ],
+  "trivia_questions": [],
+  "reports": []
+}

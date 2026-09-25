@@ -1,0 +1,100 @@
+.App {
+  min-height: 100vh;
+  background-color: #FFFDF7;
+}
+
+.neo-card {
+  background: white;
+  border: 2px solid #0A0A0A;
+  border-radius: 12px;
+  box-shadow: 4px 4px 0 0 #0A0A0A;
+  transition: all 0.2s ease;
+}
+
+.neo-card:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 0 #0A0A0A;
+}
+
+.neo-button-primary {
+  background: #FF90E8;
+  color: #0A0A0A;
+  font-weight: 700;
+  border: 2px solid #0A0A0A;
+  border-radius: 9999px;
+  padding: 12px 24px;
+  box-shadow: 4px 4px 0 0 #0A0A0A;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.neo-button-primary:hover:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 0 #0A0A0A;
+}
+
+.neo-button-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.neo-button-secondary {
+  background: #B4FF39;
+  color: #0A0A0A;
+  font-weight: 700;
+  border: 2px solid #0A0A0A;
+  border-radius: 9999px;
+  padding: 12px 24px;
+  box-shadow: 4px 4px 0 0 #0A0A0A;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.neo-button-secondary:hover:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 0 #0A0A0A;
+}
+
+.neo-button-outline {
+  background: transparent;
+  color: #0A0A0A;
+  font-weight: 700;
+  border: 2px solid #0A0A0A;
+  border-radius: 9999px;
+  padding: 12px 24px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.neo-button-outline:hover:not(:disabled) {
+  background: #E5E5E5;
+}
+
+.neo-input {
+  background: white;
+  border: 2px solid #0A0A0A;
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 2px 2px 0 0 #0A0A0A;
+  font-family: 'DM Sans', sans-serif;
+  outline: none;
+}
+
+.neo-input:focus {
+  outline: none;
+  border-color: #0A0A0A;
+}
+
+.feed-container {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .feed-container {
+    max-width: 100%;
+  }
+}
