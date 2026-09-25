@@ -68,7 +68,7 @@ export default function PrayerWall() {
     try {
       setLoading(true);
       const { data } = await api.get('/api/prayers');
-      setPrayers(data);
+      setPrayers(Array.isArray(data) ? data : []);
     } catch (_) {
       toast.error('Failed to load prayer requests');
     } finally {
@@ -181,7 +181,7 @@ export default function PrayerWall() {
     }
   };
 
-  const filteredPrayers = prayers.filter(p => {
+  const filteredPrayers = (Array.isArray(prayers) ? prayers : []).filter(p => {
     const matchesCategory = activeCategory === 'All' || p.category === activeCategory;
     const matchesSearch = searchQuery.trim() === '' || 
       p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||

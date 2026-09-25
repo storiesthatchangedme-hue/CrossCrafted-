@@ -85,7 +85,7 @@ const Apologetics = () => {
       if (filterTopic) params.append('topic', filterTopic);
       if (search) params.append('search', search);
       const { data } = await api.get(`/api/apologetics?${params}`);
-      setPosts(data);
+      setPosts(Array.isArray(data) ? data : MOCK_POSTS);
     } catch (_) {
       // Fallback to mock data
       setPosts(MOCK_POSTS);
@@ -139,7 +139,7 @@ const Apologetics = () => {
     reader.readAsDataURL(file);
   };
 
-  const filteredPosts = posts.filter(p => {
+  const filteredPosts = (Array.isArray(posts) ? posts : []).filter(p => {
     const matchTopic = !filterTopic || p.topic === filterTopic;
     const matchSearch = !search || p.title.toLowerCase().includes(search.toLowerCase()) || p.body.toLowerCase().includes(search.toLowerCase());
     return matchTopic && matchSearch;

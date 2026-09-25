@@ -60,7 +60,7 @@ const Shop = () => {
   const fetchProducts = useCallback(async (q = '') => {
     try {
       const { data } = await api.get(`/api/products?search=${encodeURIComponent(q)}`);
-      setProducts(data);
+      setProducts(Array.isArray(data) ? data : []);
     } catch (_) {
       toast.error('Failed to load products');
     } finally {
@@ -94,19 +94,19 @@ const Shop = () => {
   };
 
   const featuredProducts = useMemo(() => {
-    const featured = products.filter(p => p.is_featured);
+    const featured = (Array.isArray(products) ? products : []).filter(p => p.is_featured);
     if (featured.length >= 2) return featured.slice(0, 2);
     return products.slice(0, 2);
   }, [products]);
 
   const recentProducts = useMemo(() => {
-    return [...products]
+    return [...(Array.isArray(products) ? products : [])]
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, 4);
   }, [products]);
 
   const filteredProducts = useMemo(() => {
-    let result = [...products];
+    let result = [...(Array.isArray(products) ? products : [])];
 
     // Tab filtering
     if (activeTab === 'mine') {

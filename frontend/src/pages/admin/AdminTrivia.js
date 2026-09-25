@@ -74,7 +74,7 @@ export default function AdminTrivia() {
     setLoading(true);
     try {
       const res = await api.get('/api/admin/trivia');
-      setQuestions(res.data.trivia || []);
+      setQuestions(Array.isArray(res.data.trivia) ? res.data.trivia : []);
     } catch (err) {
       toast.error('Failed to load trivia questions');
     } finally {
@@ -301,7 +301,7 @@ export default function AdminTrivia() {
   };
 
   // Filter and Search Logic
-  const filteredQuestions = questions.filter(q => {
+  const filteredQuestions = (Array.isArray(questions) ? questions : []).filter(q => {
     const matchesSearch = q.question.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (q.explanation && q.explanation.toLowerCase().includes(searchTerm.toLowerCase())) ||
                           q.options.some(o => o.toLowerCase().includes(searchTerm.toLowerCase()));

@@ -80,7 +80,7 @@ const ListYourChurch = () => {
       if (filterDenom) params.append('denomination', filterDenom);
       if (search) params.append('search', search);
       const { data } = await api.get(`/api/church-directory?${params}`);
-      setChurches(data);
+      setChurches(Array.isArray(data) ? data : MOCK_CHURCHES);
     } catch (_) {
       setChurches(MOCK_CHURCHES);
     } finally {
@@ -126,7 +126,7 @@ const ListYourChurch = () => {
     reader.readAsDataURL(file);
   };
 
-  const filtered = churches.filter(c => {
+  const filtered = (Array.isArray(churches) ? churches : []).filter(c => {
     const matchState = !filterState || c.state === filterState;
     const matchCity = !filterCity || c.city?.toLowerCase().includes(filterCity.toLowerCase());
     const matchDenom = !filterDenom || c.denomination === filterDenom;

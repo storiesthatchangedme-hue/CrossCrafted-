@@ -76,7 +76,7 @@ const Notifications = () => {
   const fetchNotifications = useCallback(async () => {
     try {
       const { data } = await api.get('/api/notifications');
-      setNotifications(data.notifications);
+      setNotifications(Array.isArray(data.notifications) ? data.notifications : []);
       setUnreadCount(data.unread_count);
     } catch (_) {}
     finally { setLoading(false); }
@@ -126,7 +126,7 @@ const Notifications = () => {
     const filter = TAB_FILTER_MAP[activeFilter];
     if (!filter) return notifications;
     if (filter.types) {
-      return notifications.filter(n => filter.types.includes(n.type));
+      return (Array.isArray(notifications) ? notifications : []).filter(n => filter.types.includes(n.type));
     }
     return notifications;
   }, [notifications, activeFilter]);

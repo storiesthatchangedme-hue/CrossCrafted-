@@ -123,8 +123,8 @@ const ListYourBusiness = () => {
         api.get('/api/business-directory').catch(() => ({ data: MOCK_BUSINESSES })),
         api.get('/api/marketplace').catch(() => ({ data: MOCK_LISTINGS })),
       ]);
-      setBusinesses(bizRes.data);
-      setListings(mktRes.data);
+      setBusinesses(Array.isArray(bizRes.data) ? bizRes.data : MOCK_BUSINESSES);
+      setListings(Array.isArray(mktRes.data) ? mktRes.data : MOCK_LISTINGS);
     } catch (_) {
       setBusinesses(MOCK_BUSINESSES);
       setListings(MOCK_LISTINGS);
@@ -194,7 +194,7 @@ const ListYourBusiness = () => {
     setImagePreviews(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const filteredBiz = businesses.filter(b => {
+  const filteredBiz = (Array.isArray(businesses) ? businesses : []).filter(b => {
     const matchState = !filterState || b.state === filterState;
     const matchCity = !filterCity || b.city?.toLowerCase().includes(filterCity.toLowerCase());
     const matchCat = !filterCategory || b.category === filterCategory;
@@ -202,7 +202,7 @@ const ListYourBusiness = () => {
     return matchState && matchCity && matchCat && matchSearch;
   });
 
-  const filteredMkt = listings.filter(l => {
+  const filteredMkt = (Array.isArray(listings) ? listings : []).filter(l => {
     const matchCat = !filterCategory || l.category === filterCategory;
     const matchSearch = !search || l.title.toLowerCase().includes(search.toLowerCase()) || l.description?.toLowerCase().includes(search.toLowerCase());
     return matchCat && matchSearch;
