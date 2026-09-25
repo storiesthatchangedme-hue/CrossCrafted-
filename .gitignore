@@ -76,3 +76,18 @@ serve-build.js
 
 # Firebase config (not used)
 firebase-applet-config.json
+
+# Tool results (internal, not source)
+tool-results/
+
+# Scripts generated during dev
+scripts/*.json
+
+# Skills (internal)
+skills/
+
+# Memory (internal)
+memory/
+
+# CrossCrafted source reference
+crosscrafted-src/
