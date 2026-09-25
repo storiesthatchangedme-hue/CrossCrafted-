@@ -1,7 +1,7 @@
 {
-  "buildCommand": "CI=false DISABLE_ESLINT_PLUGIN=true ESLINT_NO_DEV_ERRORS=true FAST_REFRESH=false npm run build --workspace=frontend && cp -r frontend/build build",
-  "outputDirectory": "build",
-  "installCommand": "npm install",
+  "buildCommand": "cd frontend && CI=false DISABLE_ESLINT_PLUGIN=true ESLINT_NO_DEV_ERRORS=true FAST_REFRESH=false npx craco build",
+  "outputDirectory": "frontend/build",
+  "installCommand": "cd frontend && npm install",
   "framework": null,
   "rewrites": [
     {
