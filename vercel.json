@@ -3,6 +3,7 @@
   "outputDirectory": "frontend/build",
   "installCommand": "cd frontend && npm install",
   "framework": null,
+  "gitIgnoredBuildStep": false,
   "rewrites": [
     {
       "source": "/api/:path*",
