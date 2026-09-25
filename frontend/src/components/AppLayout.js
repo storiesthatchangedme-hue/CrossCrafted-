@@ -19,12 +19,6 @@ const AppLayout = () => {
 
   const handleLogout = async () => { await logout(); window.location.href = '/'; };
   const isActive = (path) => {
-    if (path.includes('tab=discover')) {
-      return location.pathname === '/app/feed' && !location.search.includes('tab=connections');
-    }
-    if (path.includes('tab=connections')) {
-      return location.pathname === '/app/feed' && location.search.includes('tab=connections');
-    }
     const cleanPath = path.split('?')[0];
     return location.pathname === cleanPath || location.pathname.startsWith(cleanPath + '/');
   };

@@ -114,7 +114,7 @@ function AppRouter() {
         }
       >
         <Route index element={<Navigate to="/app/churches" replace />} />
-        <Route path="feed" element={<SocialFeed />} />
+        <Route path="feed" element={<Navigate to="/app/churches" replace />} />
         <Route path="explore" element={<Explore />} />
         <Route path="trivia" element={<Trivia />} />
         <Route path="apologetics" element={<Apologetics />} />
