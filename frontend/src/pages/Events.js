@@ -14,22 +14,32 @@ import { INDIAN_STATES, LANGUAGES } from '@/constants/india';
 import { MultiSelect } from '@/components/MultiSelect';
 import { GRADIENTS } from '@/lib/constants';
 
+const CATEGORY_ICONS = {
+  worship: Music, 'bible-study': BookOpen, conference: Sparkles, retreat: Flame,
+  youth: TrendingUp, outreach: HandHelping, fellowship: Users, concert: Mic,
+  prayer: Heart, seminar: BookOpen, livestream: Radio, workshop: LayoutGrid,
+};
+
 const EVENT_CATEGORIES = [
-  { value: 'worship', label: 'Worship Service', icon: Music, color: '#EC4899' },
-  { value: 'bible-study', label: 'Bible Study', icon: BookOpen, color: '#6366F1' },
-  { value: 'conference', label: 'Conference', icon: Sparkles, color: '#F59E0B' },
-  { value: 'retreat', label: 'Retreat', icon: Flame, color: '#10B981' },
-  { value: 'youth', label: 'Youth Event', icon: TrendingUp, color: '#3B82F6' },
-  { value: 'outreach', label: 'Outreach', icon: HandHelping, color: '#8B5CF6' },
-  { value: 'fellowship', label: 'Fellowship', icon: Users, color: '#14B8A6' },
-  { value: 'concert', label: 'Concert', icon: Mic, color: '#F43F5E' },
-  { value: 'prayer', label: 'Prayer Meeting', icon: Heart, color: '#A855F7' },
-  { value: 'seminar', label: 'Seminar', icon: BookOpen, color: '#0EA5E9' },
-  { value: 'livestream', label: 'Live Stream', icon: Radio, color: '#EF4444' },
-  { value: 'workshop', label: 'Workshop', icon: LayoutGrid, color: '#D946EF' },
+  { value: 'worship', label: 'Worship Service', color: '#EC4899' },
+  { value: 'bible-study', label: 'Bible Study', color: '#6366F1' },
+  { value: 'conference', label: 'Conference', color: '#F59E0B' },
+  { value: 'retreat', label: 'Retreat', color: '#10B981' },
+  { value: 'youth', label: 'Youth Event', color: '#3B82F6' },
+  { value: 'outreach', label: 'Outreach', color: '#8B5CF6' },
+  { value: 'fellowship', label: 'Fellowship', color: '#14B8A6' },
+  { value: 'concert', label: 'Concert', color: '#F43F5E' },
+  { value: 'prayer', label: 'Prayer Meeting', color: '#A855F7' },
+  { value: 'seminar', label: 'Seminar', color: '#0EA5E9' },
+  { value: 'livestream', label: 'Live Stream', color: '#EF4444' },
+  { value: 'workshop', label: 'Workshop', color: '#D946EF' },
 ];
 
 const getCategoryMeta = (cat) => EVENT_CATEGORIES.find(c => c.value === cat) || EVENT_CATEGORIES[0];
+const CategoryIcon = ({ category, size = 12 }) => {
+  const Icon = CATEGORY_ICONS[category] || Music;
+  return <Icon size={size} />;
+};
 
 const Events = () => {
   const { user } = useAuth();
@@ -64,7 +74,7 @@ const Events = () => {
       if (filterCategory) params.append('category', filterCategory);
       if (searchQuery) params.append('search', searchQuery);
       const { data } = await api.get(`/api/events?${params}`);
-      let eventList = Array.isArray(data) ? data : data.events || [];
+      let eventList = Array.isArray(data) ? data : (Array.isArray(data?.events) ? data.events : []);
       // Client-side date filtering
       if (dateFilter !== 'all') {
         const now = new Date();
@@ -87,7 +97,7 @@ const Events = () => {
   }, [filterState, filterLanguage, filterCategory, searchQuery, dateFilter]);
 
   const fetchChurches = useCallback(async () => {
-    try { const { data } = await api.get('/api/churches'); setChurches(data); } catch (_) {}
+    try { const { data } = await api.get('/api/churches'); setChurches(Array.isArray(data) ? data : []); } catch (_) {}
   }, []);
 
   useEffect(() => { fetchEvents(); fetchChurches(); }, [fetchEvents, fetchChurches]);
@@ -237,7 +247,7 @@ const Events = () => {
               filterCategory === cat.value ? `border-opacity-30` : 'bg-white/[0.03] border-white/[0.06] text-[#94A3B8] hover:text-white'
             }`}
             style={filterCategory === cat.value ? { background: `${cat.color}20`, borderColor: `${cat.color}50`, color: cat.color } : {}}>
-            <cat.icon size={12} /> {cat.label}
+            <CategoryIcon category={cat.value} size={12} /> {cat.label}
           </button>
         ))}
       </div>
@@ -323,7 +333,7 @@ const Events = () => {
                   <div className="absolute top-3 left-3" style={live ? { left: '80px' } : {}}>
                     <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold backdrop-blur-sm border border-white/[0.12]"
                       style={{ background: `${cat.color}30`, color: cat.color }}>
-                      {React.createElement(cat.icon, { size: 10 })} {cat.label}
+                      <CategoryIcon category={cat.value} size={10} /> {cat.label}
                     </span>
                   </div>
 
@@ -534,7 +544,7 @@ const Events = () => {
                           formData.category === cat.value ? '' : 'bg-white/[0.03] border-white/[0.06] text-[#94A3B8]'
                         }`}
                         style={formData.category === cat.value ? { background: `${cat.color}20`, borderColor: `${cat.color}50`, color: cat.color } : {}}>
-                        <cat.icon size={11} /> {cat.label}
+                        <CategoryIcon category={cat.value} size={11} /> {cat.label}
                       </button>
                     ))}
                   </div>
