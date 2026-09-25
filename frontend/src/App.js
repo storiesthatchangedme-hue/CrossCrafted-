@@ -22,7 +22,7 @@ const PendingApproval = React.lazy(() => import("@/pages/PendingApproval"));
 const ForgotPassword = React.lazy(() => import("@/pages/ForgotPassword"));
 const ResetPassword = React.lazy(() => import("@/pages/ResetPassword"));
 const AppLayout = React.lazy(() => import("@/components/AppLayout"));
-const SocialFeed = React.lazy(() => import("@/pages/SocialFeed"));
+// SocialFeed removed - BFF/Matrimony feature deprecated
 const Trivia = React.lazy(() => import("@/pages/Trivia"));
 const PrayerWall = React.lazy(() => import("@/pages/PrayerWall"));
 const Explore = React.lazy(() => import("@/pages/Explore"));
