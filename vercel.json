@@ -1,12 +1,5 @@
 {
-  "buildCommand": "cd frontend && npm install && CI=false DISABLE_ESLINT_PLUGIN=true npm run build",
-  "outputDirectory": "frontend/build",
-  "functions": {
-    "api/index.js": {
-      "runtime": "@vercel/node",
-      "includeFiles": "frontend/build/**"
-    }
-  },
+  "outputDirectory": "build",
   "rewrites": [
     {
       "source": "/api/:path*",
