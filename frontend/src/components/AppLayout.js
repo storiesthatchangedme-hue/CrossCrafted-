@@ -86,7 +86,7 @@ const AppLayout = () => {
         data-testid="app-header"
       >
         <div className="flex justify-between items-center h-12 md:h-14 px-4 md:px-5">
-          <Link to="/app/feed" className="flex items-center gap-2" data-testid="app-logo">
+          <Link to="/app/churches" className="flex items-center gap-2" data-testid="app-logo">
             {/* Stacked Cards Logo Icon */}
             <div className="relative w-8 h-8 shrink-0">
               {/* Back tilted card */}
