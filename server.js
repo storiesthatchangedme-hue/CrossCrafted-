@@ -141,7 +141,7 @@ const upload = multer({
 });
 
 // --- Database Helper (In-memory + JSON File Persistence) ---
-let db = {
+if (!db) db = {
   users: [],
   posts: [],
   churches: [],
