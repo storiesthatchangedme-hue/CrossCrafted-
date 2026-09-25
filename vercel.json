@@ -4,6 +4,7 @@
   "installCommand": "cd frontend && npm install --legacy-peer-deps",
   "framework": null,
   "gitIgnoredBuildStep": false,
+  "cacheDir": ".vercel/cache",
   "rewrites": [
     {
       "source": "/api/:path*",
