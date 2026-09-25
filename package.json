@@ -6,7 +6,7 @@
     "frontend"
   ],
   "engines": {
-    "node": "24.x"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "node server.js",
@@ -25,8 +25,7 @@
     "express": "^4.19.2",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.3.0",
-    "jsonwebtoken": "^9.0.2",
-    "react-dom": "19.2.7"
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
     "uuid": "^9.0.1"
