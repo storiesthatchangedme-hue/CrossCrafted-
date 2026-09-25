@@ -70,14 +70,14 @@ function AppRouter() {
       <Route path="/for-churches" element={<ForChurches />} />
       <Route path="/for-creators" element={<ForCreators />} />
       <Route path="/contact" element={<Contact />} />
-      {/* Auth pages disabled — signup/login closed for now */}
-      <Route path="/login" element={<Navigate to="/" replace />} />
-      <Route path="/register" element={<Navigate to="/" replace />} />
-      <Route path="/forgot-password" element={<Navigate to="/" replace />} />
-      <Route path="/reset-password" element={<Navigate to="/" replace />} />
-      <Route path="/auth/callback" element={<Navigate to="/" replace />} />
-      <Route path="/onboarding" element={<Navigate to="/" replace />} />
-      <Route path="/pending-approval" element={<Navigate to="/" replace />} />
+      {/* Auth pages */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
+      <Route path="/onboarding" element={<Onboarding />} />
+      <Route path="/pending-approval" element={<PendingApproval />} />
       {/* Admin panel */}
       <Route
         path="/app/admin"

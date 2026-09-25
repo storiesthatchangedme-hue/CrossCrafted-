@@ -49,14 +49,14 @@ export default function Home() {
             transition={{ duration: 0.5, delay: 0.3 }}
             className="flex flex-wrap justify-center gap-4 pt-2"
           >
-            <Link to="/app/trivia">
+            <Link to="/register">
               <button className="px-8 py-3.5 bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold rounded-2xl text-sm uppercase tracking-wider shadow-lg shadow-[#F39B9B]/20 flex items-center gap-2 transition-all">
-                <Award size={18} /> Bible Trivia
+                <ArrowRight size={18} /> Get Started
               </button>
             </Link>
-            <Link to="/app/churches">
+            <Link to="/login">
               <button className="px-8 py-3.5 border border-white/[0.08] hover:border-white/[0.15] text-[#A09DB1] hover:text-white font-extrabold rounded-2xl text-sm uppercase tracking-wider transition-all bg-white/[0.02] flex items-center gap-2">
-                <Search size={18} /> Find Churches
+                Sign In
               </button>
             </Link>
           </motion.div>
