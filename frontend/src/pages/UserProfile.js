@@ -160,7 +160,7 @@ const UserProfile = () => {
 
   const fetchUserPosts = useCallback(async (uid) => {
     try {
-      const { data } = await api.get('/api/users/${uid}/posts');
+      const { data } = await api.get(`/api/users/${uid}/posts`);
       setUserPosts(data);
     } catch (_) {
       toast.error('Failed to load posts');
@@ -171,22 +171,22 @@ const UserProfile = () => {
 
   const fetchSavedPosts = useCallback(async (uid) => {
     try {
-      const { data } = await api.get('/api/users/${uid}/saved');
+      const { data } = await api.get(`/api/users/${uid}/saved`);
       setSavedPosts(data);
     } catch (_) { /* saved posts non-critical */ }
   }, []);
 
   const fetchUserEvents = useCallback(async (uid) => {
     try {
-      const { data } = await api.get('/api/users/${uid}/events');
-      setUserEvents(data);
+      const { data } = await api.get(`/api/users/${uid}/events`);
+      setUserEvents({ created: Array.isArray(data?.created) ? data.created : [], attending: Array.isArray(data?.attending) ? data.attending : [] });
     } catch (_) { /* events non-critical */ }
   }, []);
 
   const fetchFollowers = useCallback(async (uid) => {
     setLoadingFollow(true);
     try {
-      const { data } = await api.get('/api/users/${uid}/followers');
+      const { data } = await api.get(`/api/users/${uid}/followers`);
       setFollowersList(data.users);
     } catch (_) {}
     finally { setLoadingFollow(false); }
@@ -195,7 +195,7 @@ const UserProfile = () => {
   const fetchFollowing = useCallback(async (uid) => {
     setLoadingFollow(true);
     try {
-      const { data } = await api.get('/api/users/${uid}/following-list');
+      const { data } = await api.get(`/api/users/${uid}/following-list`);
       setFollowingList(data.users);
     } catch (_) {}
     finally { setLoadingFollow(false); }
@@ -203,7 +203,7 @@ const UserProfile = () => {
 
   const fetchUserProfile = useCallback(async () => {
     try {
-      const { data } = await api.get('/api/users/${userId}');
+      const { data } = await api.get(`/api/users/${userId}`);
       setProfileUser(data);
       fetchUserPosts(userId);
     } catch (_) {
@@ -268,7 +268,7 @@ const UserProfile = () => {
     if (!window.confirm(confirmMsg)) return;
 
     try {
-      await api.post('/api/users/${userId}/${action}', {});
+      await api.post(`/api/users/${userId}/${action}`, {});
       toast.success(action === 'block' ? 'User blocked successfully' : 'User unblocked successfully');
       fetchUserProfile();
     } catch (err) {
@@ -315,10 +315,10 @@ const UserProfile = () => {
   const handleFollow = async () => {
     try {
       if (profileUser.is_following) {
-        await api.delete('/api/users/${userId}/follow');
+        await api.delete(`/api/users/${userId}/follow`);
         toast.success('Unfollowed');
       } else {
-        await api.post('/api/users/${userId}/follow', {});
+        await api.post(`/api/users/${userId}/follow`, {});
         toast.success('Following!');
       }
       fetchUserProfile();
@@ -330,9 +330,9 @@ const UserProfile = () => {
   const handleLike = async (postId, isLiked) => {
     try {
       if (isLiked) {
-        await api.delete('/api/posts/${postId}/like');
+        await api.delete(`/api/posts/${postId}/like`);
       } else {
-        await api.post('/api/posts/${postId}/like', {});
+        await api.post(`/api/posts/${postId}/like`, {});
       }
       fetchUserPosts(displayUser?._id);
     } catch (_) {
@@ -1109,14 +1109,14 @@ const UserProfile = () => {
           currentUserId={currentUser?._id}
           onFollow={async (uid) => {
             try {
-              await api.post('/api/users/${uid}/follow', {});
+              await api.post(`/api/users/${uid}/follow`, {});
               toast.success('Following!');
               fetchFollowers(displayUser?._id || currentUser?._id);
             } catch (_) { toast.error('Failed'); }
           }}
           onUnfollow={async (uid) => {
             try {
-              await api.delete('/api/users/${uid}/follow');
+              await api.delete(`/api/users/${uid}/follow`);
               toast.success('Unfollowed');
               fetchFollowers(displayUser?._id || currentUser?._id);
             } catch (_) { toast.error('Failed'); }
@@ -1133,14 +1133,14 @@ const UserProfile = () => {
           currentUserId={currentUser?._id}
           onFollow={async (uid) => {
             try {
-              await api.post('/api/users/${uid}/follow', {});
+              await api.post(`/api/users/${uid}/follow`, {});
               toast.success('Following!');
               fetchFollowing(displayUser?._id || currentUser?._id);
             } catch (_) { toast.error('Failed'); }
           }}
           onUnfollow={async (uid) => {
             try {
-              await api.delete('/api/users/${uid}/follow');
+              await api.delete(`/api/users/${uid}/follow`);
               toast.success('Unfollowed');
               fetchFollowing(displayUser?._id || currentUser?._id);
             } catch (_) { toast.error('Failed'); }

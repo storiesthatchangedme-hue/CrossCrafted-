@@ -30,8 +30,8 @@ const Events = () => {
       if (filterState) params.append('state', filterState);
       if (filterLanguage) params.append('language', filterLanguage);
       if (searchQuery) params.append('search', searchQuery);
-      const { data } = await api.get('/api/events?${params}');
-      setEvents(data);
+      const { data } = await api.get(`/api/events?${params}`);
+      setEvents(Array.isArray(data) ? data : data.events || []);
     } catch (_) { toast.error('Failed to load'); } finally { setLoading(false); }
   }, [filterState, filterLanguage, searchQuery]);
 
@@ -56,8 +56,8 @@ const Events = () => {
   const handleRegister = async (e, eventId, isRegistered) => {
     e.stopPropagation();
     try {
-      if (isRegistered) { await api.delete('/api/events/${eventId}/register'); toast.success('Cancelled'); }
-      else { await api.post('/api/events/${eventId}/register', {}); toast.success("You're going!"); }
+      if (isRegistered) { await api.delete(`/api/events/${eventId}/register`); toast.success('Cancelled'); }
+      else { await api.post(`/api/events/${eventId}/register`, {}); toast.success("You're going!"); }
       fetchEvents();
     } catch (e) {
       if (e.response?.data?.detail === 'Already registered') toast.info('Already registered');

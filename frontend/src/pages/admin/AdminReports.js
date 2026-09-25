@@ -36,7 +36,7 @@ const AdminReports = () => {
     if (!window.confirm(confirmMsg)) return;
 
     try {
-      await api.post('/api/admin/reports/${reportId}/resolve', { action });
+      await api.post(`/api/admin/reports/${reportId}/resolve`, { action });
       toast.success(action === 'ban_user' ? 'User banned and report resolved!' : 'Report resolved successfully');
       fetchReports();
     } catch (err) {

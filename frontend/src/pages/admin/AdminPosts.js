@@ -16,7 +16,7 @@ const AdminPosts = () => {
 
   const fetchPosts = useCallback(async (q = '') => {
     try {
-      const { data } = await api.get('/api/admin/posts?search=${encodeURIComponent(q)}');
+      const { data } = await api.get(`/api/admin/posts?search=${encodeURIComponent(q)}`);
       setPosts(data.posts);
       setTotal(data.total);
     } catch (_) {
@@ -33,7 +33,7 @@ const AdminPosts = () => {
   const handleDelete = async (postId) => {
     if (!window.confirm('Delete this post and all its comments?')) return;
     try {
-      await api.delete('/api/admin/posts/${postId}');
+      await api.delete(`/api/admin/posts/${postId}`);
       toast.success('Post deleted');
       fetchPosts(search);
     } catch (_) {
@@ -49,7 +49,7 @@ const AdminPosts = () => {
     setExpandedPost(postId);
     setCommentsLoading(true);
     try {
-      const { data } = await api.get('/api/posts/${postId}/comments');
+      const { data } = await api.get(`/api/posts/${postId}/comments`);
       setPostComments(data);
     } catch (_) {
       toast.error('Failed to load comments');
@@ -61,7 +61,7 @@ const AdminPosts = () => {
   const handleDeleteComment = async (postId, commentId) => {
     if (!window.confirm('Delete this comment?')) return;
     try {
-      await api.delete('/api/admin/comments/${postId}/${commentId}');
+      await api.delete(`/api/admin/comments/${postId}/${commentId}`);
       toast.success('Comment deleted');
       setPostComments(prev => prev.filter(c => c.id !== commentId));
       setPosts(prev => prev.map(p => p._id === postId ? { ...p, comments_count: Math.max(0, (p.comments_count || 1) - 1) } : p));

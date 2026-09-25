@@ -134,7 +134,7 @@ export default function SocialFeed() {
         setLoadingAiMatch(true);
         setAiMatchDetails(null);
         try {
-          const { data } = await api.get('/api/bff/ai-match?target_id=${candidate._id}');
+          const { data } = await api.get(`/api/bff/ai-match?target_id=${candidate._id}`);
           setAiMatchDetails(data);
         } catch (e) {
           console.error('Error fetching AI match info:', e);
@@ -152,7 +152,7 @@ export default function SocialFeed() {
   const fetchCandidates = async (currentMode = matchMode) => {
     try {
       setLoading(true);
-      const { data } = await api.get('/api/bff/discover?mode=${currentMode}');
+      const { data } = await api.get(`/api/bff/discover?mode=${currentMode}`);
       setCandidates(data.candidates || []);
       setCurrentIndex(0);
     } catch (err) {
@@ -181,7 +181,7 @@ export default function SocialFeed() {
   const fetchCompatibleProfiles = async (currentMode = matchMode) => {
     setLoadingCompatible(true);
     try {
-      const { data } = await api.get('/api/bff/compatible?mode=${currentMode}');
+      const { data } = await api.get(`/api/bff/compatible?mode=${currentMode}`);
       setCompatibleProfiles(data.compatible_profiles || []);
     } catch (err) {
       console.error('Error fetching compatible profiles:', err);

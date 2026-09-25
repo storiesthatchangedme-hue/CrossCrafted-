@@ -32,7 +32,7 @@ const AdminApprovals = () => {
   const handleAction = async (userId, status) => {
     setActionLoading((prev) => ({ ...prev, [userId]: status }));
     try {
-      await api.put('/api/admin/users/${userId}/status', { status });
+      await api.put(`/api/admin/users/${userId}/status`, { status });
       setPendingUsers((prev) => prev.filter((u) => u._id !== userId));
     } catch (err) {
       console.error('Failed to update user status:', err);

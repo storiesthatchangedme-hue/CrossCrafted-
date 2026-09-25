@@ -32,7 +32,7 @@ const AdminLogs = () => {
       if (actionFilter) params.append('action_type', actionFilter);
       if (dateFrom) params.append('date_from', dateFrom);
       if (dateTo) params.append('date_to', dateTo);
-      const { data } = await api.get('/api/admin/logs?${params}');
+      const { data } = await api.get(`/api/admin/logs?${params}`);
       setLogs(data.logs);
       setTotal(data.total);
     } catch (_) {

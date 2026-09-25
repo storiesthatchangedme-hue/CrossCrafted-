@@ -56,7 +56,7 @@ const Explore = () => {
       const params = new URLSearchParams();
       if (filterState) params.append('state', filterState);
       if (filterLanguage) params.append('language', filterLanguage);
-      const { data } = await api.get('/api/explore?${params}');
+      const { data } = await api.get(`/api/explore?${params}`);
       setContent(data);
     } catch (_) { toast.error('Failed to load'); }
     finally { setLoading(false); }
@@ -83,7 +83,7 @@ const Explore = () => {
     setSearching(true);
     searchTimerRef.current = setTimeout(async () => {
       try {
-        const { data } = await api.get('/api/search?q=${encodeURIComponent(searchQuery.trim())}&limit=8');
+        const { data } = await api.get(`/api/search?q=${encodeURIComponent(searchQuery.trim())}&limit=8`);
         setSearchResults(data);
         // Save to recent searches
         api.post('/api/search/recent', { query: searchQuery.trim() }).catch(() => {});
@@ -97,11 +97,11 @@ const Explore = () => {
 
   const handleFollowUser = async (userId) => {
     try {
-      await api.post('/api/users/${userId}/follow', {});
+      await api.post(`/api/users/${userId}/follow`, {});
       toast.success('Following!');
       if (isSearching) {
         // Refresh search
-        const { data } = await api.get('/api/search?q=${encodeURIComponent(searchQuery.trim())}&limit=8');
+        const { data } = await api.get(`/api/search?q=${encodeURIComponent(searchQuery.trim())}&limit=8`);
         setSearchResults(data);
       } else {
         fetchExploreContent();

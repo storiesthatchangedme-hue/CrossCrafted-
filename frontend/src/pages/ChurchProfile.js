@@ -36,8 +36,8 @@ const ChurchProfile = () => {
 
   const fetchPosts = useCallback(async () => {
     try {
-      const { data } = await api.get('/api/churches/${churchId}/posts');
-      setPosts(data);
+      const { data } = await api.get(`/api/churches/${churchId}/posts`);
+      setPosts(Array.isArray(data) ? data : []);
     } catch (_) {
       /* church posts non-critical */
     }
@@ -45,8 +45,8 @@ const ChurchProfile = () => {
 
   const fetchEvents = useCallback(async () => {
     try {
-      const { data } = await api.get('/api/churches/${churchId}/events');
-      setEvents(data);
+      const { data } = await api.get(`/api/churches/${churchId}/events`);
+      setEvents(Array.isArray(data) ? data : []);
     } catch (_) {
       /* church events non-critical */
     }
@@ -54,7 +54,7 @@ const ChurchProfile = () => {
 
   const fetchChurch = useCallback(async () => {
     try {
-      const { data } = await api.get('/api/churches/${churchId}');
+      const { data } = await api.get(`/api/churches/${churchId}`);
       setChurch(data);
       setFormData({
         name: data.name || '',
@@ -79,10 +79,10 @@ const ChurchProfile = () => {
   const handleFollow = async () => {
     try {
       if (church.is_following) {
-        await api.delete('/api/churches/${churchId}/follow');
+        await api.delete(`/api/churches/${churchId}/follow`);
         toast.success('Unfollowed');
       } else {
-        await api.post('/api/churches/${churchId}/follow', {});
+        await api.post(`/api/churches/${churchId}/follow`, {});
         toast.success('Following!');
       }
       fetchChurch();
@@ -94,7 +94,7 @@ const ChurchProfile = () => {
   const handleUpdateChurch = async (e) => {
     e.preventDefault();
     try {
-      await api.put('/api/churches/${churchId}', formData);
+      await api.put(`/api/churches/${churchId}`, formData);
       toast.success('Church updated!');
       setEditing(false);
       fetchChurch();
@@ -111,7 +111,7 @@ const ChurchProfile = () => {
       const fd = new FormData();
       fd.append('file', file);
       const { data: uploaded } = await api.post('/api/upload', fd, uploadConfig());
-      await api.put('/api/churches/${churchId}', { cover_image: uploaded.url });
+      await api.put(`/api/churches/${churchId}`, { cover_image: uploaded.url });
       toast.success('Cover image updated!');
       fetchChurch();
     } catch (error) {
@@ -173,8 +173,8 @@ const ChurchProfile = () => {
 
   const handleLike = async (postId, isLiked) => {
     try {
-      if (isLiked) await api.delete('/api/posts/${postId}/like');
-      else await api.post('/api/posts/${postId}/like', {});
+      if (isLiked) await api.delete(`/api/posts/${postId}/like`);
+      else await api.post(`/api/posts/${postId}/like`, {});
       fetchPosts();
     } catch (_) {
       toast.error('Like failed');
@@ -183,7 +183,7 @@ const ChurchProfile = () => {
 
   const handleRegister = async (eventId) => {
     try {
-      await api.post('/api/events/${eventId}/register', {});
+      await api.post(`/api/events/${eventId}/register`, {});
       toast.success('Registered!');
       fetchEvents();
     } catch (error) {

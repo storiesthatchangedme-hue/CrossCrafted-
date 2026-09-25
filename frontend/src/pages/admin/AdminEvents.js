@@ -13,7 +13,7 @@ const AdminEvents = () => {
 
   const fetchEvents = useCallback(async (q = '') => {
     try {
-      const { data } = await api.get('/api/admin/events?search=${encodeURIComponent(q)}');
+      const { data } = await api.get(`/api/admin/events?search=${encodeURIComponent(q)}`);
       setEvents(data.events);
       setTotal(data.total);
     } catch (_) {
@@ -30,7 +30,7 @@ const AdminEvents = () => {
   const handleDelete = async (eventId, title) => {
     if (!window.confirm(`Delete event "${title}" and all registrations?`)) return;
     try {
-      await api.delete('/api/admin/events/${eventId}');
+      await api.delete(`/api/admin/events/${eventId}`);
       toast.success('Event deleted');
       fetchEvents(search);
     } catch (_) {

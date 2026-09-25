@@ -13,7 +13,7 @@ const AdminProducts = () => {
 
   const fetchProducts = useCallback(async (q = '') => {
     try {
-      const { data } = await api.get('/api/admin/products?search=${encodeURIComponent(q)}');
+      const { data } = await api.get(`/api/admin/products?search=${encodeURIComponent(q)}`);
       setProducts(data.products);
       setTotal(data.total);
     } catch (_) {
@@ -30,7 +30,7 @@ const AdminProducts = () => {
   const handleDelete = async (productId, title) => {
     if (!window.confirm(`Delete product "${title}"?`)) return;
     try {
-      await api.delete('/api/admin/products/${productId}');
+      await api.delete(`/api/admin/products/${productId}`);
       toast.success('Product deleted');
       fetchProducts(search);
     } catch (_) {

@@ -117,7 +117,7 @@ export default function PrayerWall() {
 
   const handlePrayToggle = async (prayerId) => {
     try {
-      const { data } = await api.post('/api/prayers/${prayerId}/pray', {});
+      const { data } = await api.post(`/api/prayers/${prayerId}/pray`, {});
       
       // Feedback toast
       if (data.is_praying) {
@@ -157,7 +157,7 @@ export default function PrayerWall() {
     if (!text.trim()) return;
 
     try {
-      const { data } = await api.post('/api/prayers/${prayerId}/comments', {
+      const { data } = await api.post(`/api/prayers/${prayerId}/comments`, {
         text: text.trim()
       });
 

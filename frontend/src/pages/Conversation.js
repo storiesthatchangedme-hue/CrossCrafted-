@@ -51,7 +51,7 @@ const Conversation = () => {
 
   const fetchMessages = useCallback(async () => {
     try {
-      const { data } = await api.get('/api/conversations/${convoId}/messages');
+      const { data } = await api.get(`/api/conversations/${convoId}/messages`);
       setMessages(data.messages);
     } catch (_) {}
     finally { setLoading(false); }
@@ -105,7 +105,7 @@ const Conversation = () => {
 
     setMessages(prev => [...prev, optimistic]);
     try {
-      const { data } = await api.post('/api/conversations/${convoId}/messages', { text });
+      const { data } = await api.post(`/api/conversations/${convoId}/messages`, { text });
       setMessages(prev => prev.map(m => m._id === optimistic._id ? data : m));
     } catch (_) {
       setMessages(prev => prev.filter(m => m._id !== optimistic._id));
@@ -157,7 +157,7 @@ const Conversation = () => {
 
   const handleReact = async (messageId, emoji) => {
     try {
-      const { data } = await api.post('/api/conversations/${convoId}/messages/${messageId}/react', { emoji });
+      const { data } = await api.post(`/api/conversations/${convoId}/messages/${messageId}/react`, { emoji });
       setMessages(prev => prev.map(m => m._id === messageId ? data : m));
       setActiveEmojiPickerId(null);
     } catch (_) {

@@ -1,0 +1,1229 @@
+     1→import { useState, useEffect, useRef, useCallback } from 'react';
+     2→import { useAuth } from '@/contexts/AuthContext';
+     3→import { useParams, useNavigate } from 'react-router-dom';
+     4→import api, { uploadConfig } from '@/lib/api';
+     5→import { motion } from 'framer-motion';
+     6→import { User, Mail, Edit2, Save, X, Heart, MessageCircle, UserPlus, UserMinus, Bookmark, Calendar, Camera, MapPin, Globe, ShieldCheck, Crown, Award, ShieldAlert, Ban, Flag, Music, Activity, Sparkles, Clock, Church } from 'lucide-react';
+     7→import { toast } from 'sonner';
+     8→import PostCard from '@/components/PostCard';
+     9→import EventCard from '@/components/EventCard';
+    10→import { INDIAN_STATES, LANGUAGES } from '@/constants/india';
+    11→import { MultiSelect } from '@/components/MultiSelect';
+    12→import { GRADIENTS } from '@/lib/constants';
+    13→
+    14→const FollowList = ({ users, loading, emptyText, currentUserId, onFollow, onUnfollow, navigate }) => {
+    15→  if (loading) {
+    16→    return (
+    17→      <div className="flex justify-center py-10">
+    18→        <div className="w-8 h-8 border-2 border-[#A855F7] border-r-transparent rounded-full animate-spin" />
+    19→      </div>
+    20→    );
+    21→  }
+    22→  if (!users || users.length === 0) {
+    23→    return (
+    24→      <div className="text-center py-12 bg-white/[0.02] rounded-2xl border border-white/[0.06]" data-testid="follow-list-empty">
+    25→        <User size={36} className="mx-auto mb-3 text-[#334155]" />
+    26→        <p className="text-[#64748B] text-sm font-medium">{emptyText}</p>
+    27→      </div>
+    28→    );
+    29→  }
+    30→  return (
+    31→    <div className="space-y-2" data-testid="follow-list">
+    32→      {users.map((u, i) => (
+    33→        <motion.div
+    34→          key={u._id}
+    35→          initial={{ opacity: 0, y: 8 }}
+    36→          animate={{ opacity: 1, y: 0 }}
+    37→          transition={{ delay: i * 0.03 }}
+    38→          className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-all cursor-pointer"
+    39→          onClick={() => navigate(`/app/profile/${u._id}`)}
+    40→          data-testid="follow-list-user"
+    41→        >
+    42→          <div className="w-11 h-11 rounded-full overflow-hidden shrink-0 border border-white/[0.1]"
+    43→            style={!u.profile_image ? { background: GRADIENTS[i % GRADIENTS.length] } : {}}>
+    44→            {u.profile_image
+    45→              ? <img src={u.profile_image} alt="" className="w-full h-full object-cover" />
+    46→              : <div className="w-full h-full flex items-center justify-center text-white text-sm font-bold">{u.name?.charAt(0)}</div>}
+    47→          </div>
+    48→          <div className="flex-1 min-w-0">
+    49→            <div className="flex items-center gap-1.5">
+    50→              <p className="text-sm font-bold text-white truncate">{u.name}</p>
+    51→              {u.is_verified && u.role === 'admin' ? (
+    52→                <Crown size={14} strokeWidth={2.5} className="shrink-0" style={{ color: '#FFFBEB', fill: '#F59E0B' }} data-testid="admin-crown-badge" />
+    53→              ) : u.is_verified ? (
+    54→                <ShieldCheck size={14} strokeWidth={2.5} className="shrink-0" style={{ color: 'white', fill: '#3B82F6' }} data-testid="verified-badge" />
+    55→              ) : null}
+    56→            </div>
+    57→            <p className="text-xs text-[#64748B] truncate">@{u.username}{u.bio ? ` · ${u.bio}` : ''}</p>
+    58→          </div>
+    59→          {u._id !== currentUserId && (
+    60→            <button
+    61→              onClick={(e) => { e.stopPropagation(); u.is_following ? onUnfollow(u._id) : onFollow(u._id); }}
+    62→              className={`px-4 py-2 rounded-full text-xs font-bold transition-all border shrink-0 ${
+    63→                u.is_following
+    64→                  ? 'bg-white/[0.06] border-white/[0.1] text-[#94A3B8] hover:text-red-400 hover:border-red-400/30'
+    65→                  : 'bg-[#A855F7]/15 border-[#A855F7]/30 text-[#A855F7] hover:bg-[#A855F7]/25'
+    66→              }`}
+    67→              data-testid={u.is_following ? 'unfollow-btn' : 'follow-btn'}
+    68→            >
+    69→              {u.is_following ? 'Following' : 'Follow'}
+    70→            </button>
+    71→          )}
+    72→        </motion.div>
+    73→      ))}
+    74→    </div>
+    75→  );
+    76→};
+    77→
+    78→const UserProfile = () => {
+    79→  const { user: currentUser, checkAuth } = useAuth();
+    80→  const { userId } = useParams();
+    81→  const navigate = useNavigate();
+    82→  const [profileUser, setProfileUser] = useState(null);
+    83→  const [userPosts, setUserPosts] = useState([]);
+    84→  const [savedPosts, setSavedPosts] = useState([]);
+    85→  const [userEvents, setUserEvents] = useState({ created: [], attending: [] });
+    86→  const [loading, setLoading] = useState(true);
+    87→  const [editing, setEditing] = useState(false);
+    88→  const [formData, setFormData] = useState({
+    89→    name: '',
+    90→    bio: '',
+    91→    state: '',
+    92→    city: '',
+    93→    languages: [],
+    94→    allow_dms: true,
+    95→    worship_songs: '',
+    96→    ministries: '',
+    97→    testimony_milestone: '',
+    98→  });
+    99→  const [showReportModal, setShowReportModal] = useState(false);
+   100→  const [reportReason, setReportReason] = useState('harassment');
+   101→  const [reportDetails, setReportDetails] = useState('');
+   102→  const [submittingReport, setSubmittingReport] = useState(false);
+   103→  const [activeTab, setActiveTab] = useState('posts');
+   104→  const [uploadingImage, setUploadingImage] = useState(false);
+   105→  const [followersList, setFollowersList] = useState([]);
+   106→  const [followingList, setFollowingList] = useState([]);
+   107→  const [loadingFollow, setLoadingFollow] = useState(false);
+   108→  const fileInputRef = useRef(null);
+   109→  const [postContent, setPostContent] = useState('');
+   110→  const [postImage, setPostImage] = useState(null);
+   111→  const [postImagePreview, setPostImagePreview] = useState(null);
+   112→  const [creatingPost, setCreatingPost] = useState(false);
+   113→  const postFileInputRef = useRef(null);
+   114→
+   115→  const handlePostImageSelect = (e) => {
+   116→    const file = e.target.files[0];
+   117→    if (file) {
+   118→      setPostImage(file);
+   119→      const reader = new FileReader();
+   120→      reader.onload = () => setPostImagePreview(reader.result);
+   121→      reader.readAsDataURL(file);
+   122→    }
+   123→  };
+   124→
+   125→  const handleCreatePost = async (e) => {
+   126→    e.preventDefault();
+   127→    if (!postContent.trim()) {
+   128→      toast.error('Post content cannot be empty');
+   129→      return;
+   130→    }
+   131→    setCreatingPost(true);
+   132→    try {
+   133→      let imageUrl = '';
+   134→      if (postImage) {
+   135→        const fData = new FormData();
+   136→        fData.append('file', postImage);
+   137→        const uploadResponse = await api.post('/api/upload', fData, uploadConfig());
+   138→        imageUrl = uploadResponse.data.url || uploadResponse.data.path || '';
+   139→      }
+   140→
+   141→      await api.post('/api/posts', {
+   142→        content_text: postContent,
+   143→        image_url: imageUrl,
+   144→      });
+   145→
+   146→      toast.success('Post created successfully!');
+   147→      setPostContent('');
+   148→      setPostImage(null);
+   149→      setPostImagePreview(null);
+   150→      fetchUserPosts(currentUser?._id);
+   151→    } catch (err) {
+   152→      toast.error(err.response?.data?.detail || 'Failed to create post');
+   153→    } finally {
+   154→      setCreatingPost(false);
+   155→    }
+   156→  };
+   157→
+   158→  const isOwnProfile = !userId || userId === currentUser?._id;
+   159→  const displayUser = isOwnProfile ? currentUser : profileUser;
+   160→
+   161→  const fetchUserPosts = useCallback(async (uid) => {
+   162→    try {
+   163→      const { data } = await api.get('/api/users/${uid}/posts');
+   164→      setUserPosts(data);
+   165→    } catch (_) {
+   166→      toast.error('Failed to load posts');
+   167→    } finally {
+   168→      setLoading(false);
+   169→    }
+   170→  }, []);
+   171→
+   172→  const fetchSavedPosts = useCallback(async (uid) => {
+   173→    try {
+   174→      const { data } = await api.get('/api/users/${uid}/saved');
+   175→      setSavedPosts(data);
+   176→    } catch (_) { /* saved posts non-critical */ }
+   177→  }, []);
+   178→
+   179→  const fetchUserEvents = useCallback(async (uid) => {
+   180→    try {
+   181→      const { data } = await api.get('/api/users/${uid}/events');
+   182→      setUserEvents(data);
+   183→    } catch (_) { /* events non-critical */ }
+   184→  }, []);
+   185→
+   186→  const fetchFollowers = useCallback(async (uid) => {
+   187→    setLoadingFollow(true);
+   188→    try {
+   189→      const { data } = await api.get('/api/users/${uid}/followers');
+   190→      setFollowersList(data.users);
+   191→    } catch (_) {}
+   192→    finally { setLoadingFollow(false); }
+   193→  }, []);
+   194→
+   195→  const fetchFollowing = useCallback(async (uid) => {
+   196→    setLoadingFollow(true);
+   197→    try {
+   198→      const { data } = await api.get('/api/users/${uid}/following-list');
+   199→      setFollowingList(data.users);
+   200→    } catch (_) {}
+   201→    finally { setLoadingFollow(false); }
+   202→  }, []);
+   203→
+   204→  const fetchUserProfile = useCallback(async () => {
+   205→    try {
+   206→      const { data } = await api.get('/api/users/${userId}');
+   207→      setProfileUser(data);
+   208→      fetchUserPosts(userId);
+   209→    } catch (_) {
+   210→      toast.error('Failed to load profile');
+   211→    } finally {
+   212→      setLoading(false);
+   213→    }
+   214→  }, [userId, fetchUserPosts]);
+   215→
+   216→  useEffect(() => {
+   217→    if (isOwnProfile) {
+   218→      setProfileUser(currentUser);
+   219→      setFormData({
+   220→        name: currentUser?.name || '',
+   221→        bio: currentUser?.bio || '',
+   222→        state: currentUser?.state || '',
+   223→        city: currentUser?.city || '',
+   224→        languages: currentUser?.languages || [],
+   225→        allow_dms: currentUser?.allow_dms !== false,
+   226→        worship_songs: currentUser?.worship_songs || '',
+   227→        ministries: currentUser?.ministries || '',
+   228→        testimony_milestone: currentUser?.testimony_milestone || '',
+   229→      });
+   230→      fetchUserPosts(currentUser?._id);
+   231→      fetchSavedPosts(currentUser?._id);
+   232→      fetchUserEvents(currentUser?._id);
+   233→    } else {
+   234→      fetchUserProfile();
+   235→    }
+   236→  }, [userId, currentUser, isOwnProfile, fetchUserPosts, fetchSavedPosts, fetchUserEvents, fetchUserProfile]);
+   237→
+   238→  const handleImageUpload = async (e) => {
+   239→    const file = e.target.files[0];
+   240→    if (!file) return;
+   241→
+   242→    setUploadingImage(true);
+   243→    try {
+   244→      const formData = new FormData();
+   245→      formData.append('file', file);
+   246→      const uploadResponse = await api.post('/api/upload', formData, uploadConfig());
+   247→
+   248→      await api.put(
+   249→        '/api/users/me',
+   250→        { profile_image: uploadResponse.data.url }
+   251→      );
+   252→
+   253→      toast.success('Profile image updated!');
+   254→      await checkAuth();
+   255→    } catch (_) {
+   256→      toast.error('Failed to upload image');
+   257→    } finally {
+   258→      setUploadingImage(false);
+   259→    }
+   260→  };
+   261→
+   262→  const handleBlock = async () => {
+   263→    const action = profileUser?.is_blocked ? 'unblock' : 'block';
+   264→    const confirmMsg = action === 'block' 
+   265→      ? `Are you sure you want to block ${profileUser?.name || 'this user'}? You will not be able to message each other, and they will be hidden from your matches.` 
+   266→      : `Are you sure you want to unblock ${profileUser?.name || 'this user'}?`;
+   267→      
+   268→    if (!window.confirm(confirmMsg)) return;
+   269→
+   270→    try {
+   271→      await api.post('/api/users/${userId}/${action}', {});
+   272→      toast.success(action === 'block' ? 'User blocked successfully' : 'User unblocked successfully');
+   273→      fetchUserProfile();
+   274→    } catch (err) {
+   275→      toast.error(err.response?.data?.detail || 'Action failed');
+   276→    }
+   277→  };
+   278→
+   279→  const handleReportSubmit = async (e) => {
+   280→    e.preventDefault();
+   281→    if (!reportDetails.trim()) {
+   282→      toast.error('Please provide some details for your report');
+   283→      return;
+   284→    }
+   285→    setSubmittingReport(true);
+   286→    try {
+   287→      await api.post('/api/reports', {
+   288→        target_type: 'user',
+   289→        target_id: userId,
+   290→        reason: reportReason,
+   291→        details: reportDetails
+   292→      });
+   293→      toast.success('Thank you. Your safety report has been submitted to administrators for review.');
+   294→      setShowReportModal(false);
+   295→      setReportDetails('');
+   296→    } catch (err) {
+   297→      toast.error(err.response?.data?.detail || 'Failed to submit report');
+   298→    } finally {
+   299→      setSubmittingReport(false);
+   300→    }
+   301→  };
+   302→
+   303→  const handleUpdate = async (e) => {
+   304→    e.preventDefault();
+   305→    try {
+   306→      await api.put('/api/users/me', formData);
+   307→      toast.success('Profile updated!');
+   308→      setEditing(false);
+   309→      await checkAuth();
+   310→    } catch (_) {
+   311→      toast.error('Failed to update profile');
+   312→    }
+   313→  };
+   314→
+   315→  const handleFollow = async () => {
+   316→    try {
+   317→      if (profileUser.is_following) {
+   318→        await api.delete('/api/users/${userId}/follow');
+   319→        toast.success('Unfollowed');
+   320→      } else {
+   321→        await api.post('/api/users/${userId}/follow', {});
+   322→        toast.success('Following!');
+   323→      }
+   324→      fetchUserProfile();
+   325→    } catch (_) {
+   326→      toast.error('Action failed');
+   327→    }
+   328→  };
+   329→
+   330→  const handleLike = async (postId, isLiked) => {
+   331→    try {
+   332→      if (isLiked) {
+   333→        await api.delete('/api/posts/${postId}/like');
+   334→      } else {
+   335→        await api.post('/api/posts/${postId}/like', {});
+   336→      }
+   337→      fetchUserPosts(displayUser?._id);
+   338→    } catch (_) {
+   339→      toast.error('Like failed');
+   340→    }
+   341→  };
+   342→
+   343→  if (loading) {
+   344→    return (
+   345→      <div className="flex items-center justify-center min-h-screen">
+   346→        <div className="text-center">
+   347→          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-[#80C4E9] border-r-transparent"></div>
+   348→          <p className="mt-4 text-white font-medium">Loading profile...</p>
+   349→        </div>
+   350→      </div>
+   351→    );
+   352→  }
+   353→
+   354→  return (
+   355→    <div className="feed-container px-3 md:px-4 py-4 md:py-6" data-testid="profile-page">
+   356→      <motion.div
+   357→        initial={{ opacity: 0, y: 20 }}
+   358→        animate={{ opacity: 1, y: 0 }}
+   359→        className="bg-white/[0.04] rounded-2xl backdrop-blur-sm border border-white/[0.06] p-5 md:p-8 mb-5"
+   360→      >
+   361→        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-5">
+   362→          <div className="flex items-center gap-3.5">
+   363→            <div className="relative shrink-0">
+   364→              {displayUser?.profile_image ? (
+   365→                <img
+   366→                  src={displayUser.profile_image}
+   367→                  alt={displayUser.name}
+   368→                  className="w-[72px] h-[72px] md:w-20 md:h-20 rounded-full border-2 border-white/[0.08] object-cover"
+   369→                />
+   370→              ) : (
+   371→                <div className="w-[72px] h-[72px] md:w-20 md:h-20 rounded-full bg-[#6366F1] border-2 border-white/[0.08] flex items-center justify-center text-2xl md:text-3xl font-bold">
+   372→                  {displayUser?.name?.charAt(0).toUpperCase()}
+   373→                </div>
+   374→              )}
+   375→              {isOwnProfile && (
+   376→                <>
+   377→                  <button
+   378→                    onClick={() => fileInputRef.current?.click()}
+   379→                    disabled={uploadingImage}
+   380→                    className="absolute bottom-0 right-0 w-8 h-8 bg-[#A855F7] border border-white/[0.08] rounded-full flex items-center justify-center hover:bg-[#EC4899] transition-colors"
+   381→                    data-testid="upload-image-button"
+   382→                  >
+   383→                    <Camera size={16} strokeWidth={2.5} />
+   384→                  </button>
+   385→                  <input
+   386→                    ref={fileInputRef}
+   387→                    type="file"
+   388→                    accept="image/*"
+   389→                    onChange={handleImageUpload}
+   390→                    className="hidden"
+   391→                  />
+   392→                </>
+   393→              )}
+   394→            </div>
+   395→            <div className="min-w-0">
+   396→              <div className="flex items-center gap-2">
+   397→                <h1 className="text-2xl md:text-3xl font-bold truncate" style={{ fontFamily: 'Outfit, sans-serif' }}>
+   398→                  {displayUser?.name}
+   399→                </h1>
+   400→                {displayUser?.is_verified && displayUser?.role === 'admin' ? (
+   401→                  <Crown size={22} strokeWidth={2.5} className="shrink-0" style={{ color: '#FFFBEB', fill: '#F59E0B' }} data-testid="admin-crown-badge" />
+   402→                ) : displayUser?.is_verified ? (
+   403→                  <ShieldCheck size={22} strokeWidth={2.5} className="shrink-0" style={{ color: 'white', fill: '#3B82F6' }} data-testid="verified-badge" />
+   404→                ) : null}
+   405→              </div>
+   406→              <p className="text-sm md:text-base text-[#94A3B8] truncate">@{displayUser?.username}</p>
+   407→              {!isOwnProfile && (
+   408→                <div className="flex items-center gap-2 mt-1">
+   409→                  <Mail size={16} strokeWidth={2.5} className="text-[#94A3B8]" />
+   410→                  <span className="text-sm text-[#94A3B8]">{displayUser?.email}</span>
+   411→                </div>
+   412→              )}
+   413→              <div className="mt-2">
+   414→                <span className="inline-block px-3 py-1 bg-[#EC4899] border border-white/[0.08] rounded-full text-sm font-bold capitalize">
+   415→                  {displayUser?.role || 'user'}
+   416→                </span>
+   417→              </div>
+   418→            </div>
+   419→          </div>
+   420→          {isOwnProfile ? (
+   421→            !editing && (
+   422→              <button
+   423→                onClick={() => {
+   424→                  setEditing(true);
+   425→                  setFormData({ 
+   426→                    name: displayUser?.name || '', 
+   427→                    bio: displayUser?.bio || '', 
+   428→                    state: displayUser?.state || '', 
+   429→                    city: displayUser?.city || '', 
+   430→                    languages: displayUser?.languages || [],
+   431→                    allow_dms: displayUser?.allow_dms !== false,
+   432→                    worship_songs: displayUser?.worship_songs || '',
+   433→                    ministries: displayUser?.ministries || '',
+   434→                    testimony_milestone: displayUser?.testimony_milestone || ''
+   435→                  });
+   436→                }}
+   437→                className="neo-button-outline flex items-center gap-2"
+   438→                data-testid="edit-profile-button"
+   439→              >
+   440→                <Edit2 size={16} strokeWidth={2.5} />
+   441→                Edit Profile
+   442→              </button>
+   443→            )
+   444→          ) : (
+   445→            <div className="flex flex-col gap-4 w-full">
+   446→              {profileUser?.has_blocked_me ? (
+   447→                <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-2xl text-sm font-bold text-center">
+   448→                  This user's profile is unavailable.
+   449→                </div>
+   450→              ) : (
+   451→                <>
+   452→                  {profileUser?.is_blocked && (
+   453→                    <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-2xl text-sm font-bold text-center">
+   454→                      You have blocked this user. Unblock them to follow or message them.
+   455→                    </div>
+   456→                  )}
+   457→                  
+   458→                  <div className="flex items-center gap-3 flex-wrap">
+   459→                    {!profileUser?.is_blocked && (
+   460→                      <>
+   461→                        <button
+   462→                          onClick={handleFollow}
+   463→                          className={`flex items-center gap-2 px-6 py-3 rounded-full border border-white/[0.08] font-bold transition-all ${
+   464→                            profileUser?.is_following
+   465→                              ? 'bg-[#0A0A0A] text-white'
+   466→                              : 'bg-[#3B82F6] hover:-translate-y-0.5'
+   467→                          }`}
+   468→                          data-testid="follow-button"
+   469→                        >
+   470→                          {profileUser?.is_following ? (
+   471→                            <>
+   472→                              <UserMinus size={20} strokeWidth={2.5} />
+   473→                              Unfollow
+   474→                            </>
+   475→                          ) : (
+   476→                            <>
+   477→                              <UserPlus size={20} strokeWidth={2.5} />
+   478→                              Follow
+   479→                            </>
+   480→                          )}
+   481→                        </button>
+   482→                        
+   483→                        <button
+   484→                          onClick={async () => {
+   485→                            if (profileUser?.allow_dms === false) {
+   486→                              toast.error('This user has disabled direct messaging');
+   487→                              return;
+   488→                            }
+   489→                            try {
+   490→                              const { data } = await api.post('/api/conversations', { user_id: userId });
+   491→                              navigate(`/app/messages/${data.conversation_id}`);
+   492→                            } catch (err) { 
+   493→                              toast.error(err.response?.data?.detail || 'Failed to start conversation'); 
+   494→                            }
+   495→                          }}
+   496→                          disabled={profileUser?.allow_dms === false}
+   497→                          className={`flex items-center gap-2 px-5 py-3 rounded-full border border-white/[0.08] font-bold transition-all ${
+   498→                            profileUser?.allow_dms === false
+   499→                              ? 'bg-white/[0.02] text-[#64748B] cursor-not-allowed'
+   500→                              : 'bg-white/[0.06] text-[#CBD5E1] hover:bg-white/[0.1]'
+   501→                          }`}
+   502→                          data-testid="message-user-btn"
+   503→                          title={profileUser?.allow_dms === false ? "DMs disabled by user" : "Send direct message"}
+   504→                        >
+   505→                          <MessageCircle size={18} strokeWidth={2.5} /> Message
+   506→                        </button>
+   507→                      </>
+   508→                    )}
+   509→
+   510→                    <button
+   511→                      onClick={handleBlock}
+   512→                      className="flex items-center gap-2 px-5 py-3 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 font-bold hover:bg-rose-500/20 transition-all"
+   513→                      data-testid="block-user-btn"
+   514→                    >
+   515→                      <Ban size={18} strokeWidth={2.5} /> {profileUser?.is_blocked ? 'Unblock' : 'Block'}
+   516→                    </button>
+   517→
+   518→                    <button
+   519→                      onClick={() => setShowReportModal(true)}
+   520→                      className="flex items-center gap-2 px-5 py-3 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 font-bold hover:bg-amber-500/20 transition-all"
+   521→                      data-testid="report-user-btn"
+   522→                    >
+   523→                      <Flag size={18} strokeWidth={2.5} /> Report
+   524→                    </button>
+   525→                  </div>
+   526→                </>
+   527→              )}
+   528→            </div>
+   529→          )}
+   530→        </div>
+   531→
+   532→        {editing ? (
+   533→          <form onSubmit={handleUpdate} data-testid="profile-edit-form">
+   534→            <div className="mb-4">
+   535→              <label className="block text-sm font-bold uppercase tracking-wide mb-2">
+   536→                Name
+   537→              </label>
+   538→              <input
+   539→                type="text"
+   540→                value={formData.name}
+   541→                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+   542→                className="neo-input w-full"
+   543→                required
+   544→                data-testid="profile-name-input"
+   545→              />
+   546→            </div>
+   547→            <div className="mb-4">
+   548→              <label className="block text-sm font-bold uppercase tracking-wide mb-2">
+   549→                Bio
+   550→              </label>
+   551→              <textarea
+   552→                value={formData.bio}
+   553→                onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+   554→                className="neo-input w-full h-24 resize-none"
+   555→                placeholder="Tell us about yourself..."
+   556→                data-testid="profile-bio-input"
+   557→              />
+   558→            </div>
+   559→            <div className="grid grid-cols-2 gap-4 mb-4">
+   560→              <div>
+   561→                <label className="block text-sm font-bold uppercase tracking-wide mb-2">
+   562→                  <MapPin size={12} className="inline mr-1" />State
+   563→                </label>
+   564→                <select
+   565→                  value={formData.state}
+   566→                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+   567→                  className="neo-input w-full"
+   568→                  data-testid="profile-state-select"
+   569→                >
+   570→                  <option value="">Select state</option>
+   571→                  {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+   572→                </select>
+   573→              </div>
+   574→              <div>
+   575→                <label className="block text-sm font-bold uppercase tracking-wide mb-2">
+   576→                  <MapPin size={12} className="inline mr-1" />City
+   577→                </label>
+   578→                <input
+   579→                  type="text"
+   580→                  value={formData.city}
+   581→                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+   582→                  className="neo-input w-full"
+   583→                  placeholder="Your city"
+   584→                  data-testid="profile-city-input"
+   585→                />
+   586→              </div>
+   587→            </div>
+   588→            <div className="mb-6">
+   589→              <label className="block text-sm font-bold uppercase tracking-wide mb-2">
+   590→                <Globe size={12} className="inline mr-1" />Languages
+   591→              </label>
+   592→              <MultiSelect
+   593→                options={LANGUAGES}
+   594→                value={formData.languages}
+   595→                onChange={(langs) => setFormData({ ...formData, languages: langs })}
+   596→                placeholder="Select languages"
+   597→              />
+   598→            </div>
+   599→            <div className="mb-4">
+   600→              <label className="block text-sm font-bold uppercase tracking-wide mb-2">
+   601→                <Church size={12} className="inline mr-1 text-amber-400" /> Ministries Involved (comma separated)
+   602→              </label>
+   603→              <input
+   604→                type="text"
+   605→                value={formData.ministries}
+   606→                onChange={(e) => setFormData({ ...formData, ministries: e.target.value })}
+   607→                className="neo-input w-full text-xs"
+   608→                placeholder="e.g. Worship Team, Small Group Leader, Sunday School Teacher"
+   609→                data-testid="profile-ministries-input"
+   610→              />
+   611→            </div>
+   612→            <div className="mb-4">
+   613→              <label className="block text-sm font-bold uppercase tracking-wide mb-2">
+   614→                <Music size={12} className="inline mr-1 text-[#EC4899]" /> Favorite Worship Songs (comma separated)
+   615→              </label>
+   616→              <input
+   617→                type="text"
+   618→                value={formData.worship_songs}
+   619→                onChange={(e) => setFormData({ ...formData, worship_songs: e.target.value })}
+   620→                className="neo-input w-full text-xs"
+   621→                placeholder="e.g. Goodness of God, Yet Not I But Through Christ In Me, Way Maker"
+   622→                data-testid="profile-songs-input"
+   623→              />
+   624→            </div>
+   625→            <div className="mb-4">
+   626→              <label className="block text-sm font-bold uppercase tracking-wide mb-2">
+   627→                <Activity size={12} className="inline mr-1 text-[#3B82F6]" /> Testimony / Faith Journey Milestone
+   628→              </label>
+   629→              <input
+   630→                type="text"
+   631→                value={formData.testimony_milestone}
+   632→                onChange={(e) => setFormData({ ...formData, testimony_milestone: e.target.value })}
+   633→                className="neo-input w-full text-xs"
+   634→                placeholder="e.g. Accepted Christ in youth retreat, baptized at Bangalore Assembly in 2020"
+   635→                data-testid="profile-testimony-input"
+   636→              />
+   637→            </div>
+   638→            <div className="mb-6 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+   639→              <div>
+   640→                <label className="block text-sm font-bold text-white mb-0.5">
+   641→                  Allow Direct Messages (DMs)
+   642→                </label>
+   643→                <p className="text-xs text-[#64748B]">
+   644→                  Toggle whether other users can message you directly.
+   645→                </p>
+   646→              </div>
+   647→              <input
+   648→                type="checkbox"
+   649→                checked={formData.allow_dms !== false}
+   650→                onChange={(e) => setFormData({ ...formData, allow_dms: e.target.checked })}
+   651→                className="w-5 h-5 rounded border-white/[0.08] bg-transparent text-[#80C4E9] focus:ring-0 cursor-pointer"
+   652→                data-testid="profile-allow-dms-checkbox"
+   653→              />
+   654→            </div>
+   655→            <div className="flex gap-2">
+   656→              <button
+   657→                type="button"
+   658→                onClick={() => setEditing(false)}
+   659→                className="neo-button-outline flex items-center gap-2"
+   660→                data-testid="cancel-edit-button"
+   661→              >
+   662→                <X size={16} strokeWidth={2.5} />
+   663→                Cancel
+   664→              </button>
+   665→              <button
+   666→                type="submit"
+   667→                className="neo-button-primary flex items-center gap-2"
+   668→                style={{ background: '#80C4E9' }}
+   669→                data-testid="save-profile-button"
+   670→              >
+   671→                <Save size={16} strokeWidth={2.5} />
+   672→                Save Changes
+   673→              </button>
+   674→            </div>
+   675→          </form>
+   676→        ) : (
+   677→          <>
+   678→            <div className="mb-3">
+   679→              <h3 className="text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">Bio</h3>
+   680→              <p className="text-sm md:text-base leading-relaxed text-[#94A3B8] line-clamp-4" data-testid="profile-bio-display">
+   681→                {displayUser?.bio || 'No bio added yet.'}
+   682→              </p>
+   683→            </div>
+   684→
+   685→            {(displayUser?.state || displayUser?.city) && (
+   686→              <div className="mb-3">
+   687→                <h3 className="text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">Location</h3>
+   688→                <p className="text-sm md:text-base text-[#94A3B8] flex items-center gap-1.5" data-testid="profile-location-display">
+   689→                  <MapPin size={14} className="text-[#A855F7] shrink-0" />
+   690→                  {displayUser.city ? `${displayUser.city}, ` : ''}{displayUser.state}
+   691→                </p>
+   692→              </div>
+   693→            )}
+   694→
+   695→            {displayUser?.languages?.length > 0 && (
+   696→              <div className="mb-5">
+   697→                <h3 className="text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">Languages</h3>
+   698→                <div className="flex flex-wrap gap-1.5" data-testid="profile-languages-display">
+   699→                  {displayUser.languages.map(l => (
+   700→                    <span key={l} className="px-2.5 py-1 bg-[#A855F7]/10 text-[#A855F7] rounded-lg text-xs font-medium">{l}</span>
+   701→                  ))}
+   702→                </div>
+   703→              </div>
+   704→            )}
+   705→
+   706→            {/* Spiritual Alignment & Fellowship Goals Section */}
+   707→            <div className="mb-5 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white/[0.02] border border-white/[0.06] p-5 rounded-2xl" id="spiritual-fellowship-profile">
+   708→              <div>
+   709→                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2.5 flex items-center gap-1.5">
+   710→                  <Church size={12} className="text-amber-400" /> Spiritual Alignment
+   711→                </h4>
+   712→                <ul className="space-y-2 text-xs text-slate-300">
+   713→                  {displayUser?.denomination && <li className="flex items-center gap-2">⛪ <span className="text-slate-400 font-medium">Denomination:</span> <strong className="text-slate-200">{displayUser.denomination}</strong></li>}
+   714→                  {displayUser?.church_name && <li className="flex items-center gap-2">💒 <span className="text-slate-400 font-medium">Home Church:</span> <strong className="text-slate-200">{displayUser.church_name}</strong></li>}
+   715→                  {displayUser?.baptized && <li className="flex items-center gap-2">💧 <span className="text-slate-400 font-medium">Baptized:</span> <strong className="text-slate-200">{displayUser.baptized}</strong></li>}
+   716→                  {displayUser?.church_attendance && <li className="flex items-center gap-2">📅 <span className="text-slate-400 font-medium">Attendance:</span> <strong className="text-slate-200">{displayUser.church_attendance}</strong></li>}
+   717→                  {displayUser?.age && <li className="flex items-center gap-2">🎂 <span className="text-slate-400 font-medium">Age:</span> <strong className="text-slate-200">{displayUser.age}</strong></li>}
+   718→                  {displayUser?.gender && <li className="flex items-center gap-2">👥 <span className="text-slate-400 font-medium">Gender:</span> <strong className="text-slate-200">{displayUser.gender}</strong></li>}
+   719→                </ul>
+   720→              </div>
+   721→              <div>
+   722→                <h4 className="text-xs font-bold uppercase tracking-wider text-[#A855F7] mb-2.5 flex items-center gap-1.5">
+   723→                  <Heart size={12} className="text-[#A855F7]" /> Fellowship Goals
+   724→                </h4>
+   725→                <div className="flex flex-wrap gap-1.5">
+   726→                  {displayUser?.looking_for && displayUser.looking_for.length > 0 ? (
+   727→                    displayUser.looking_for.map(goal => (
+   728→                      <span key={goal} className="px-2.5 py-1 bg-[#A855F7]/10 text-[#A855F7] border border-[#A855F7]/20 rounded-lg text-[10px] font-extrabold tracking-wide uppercase">
+   729→                        {goal}
+   730→                      </span>
+   731→                    ))
+   732→                  ) : (
+   733→                    <span className="text-slate-500 italic text-[11px]">No fellowship goals set yet</span>
+   734→                  )}
+   735→                </div>
+   736→                
+   737→                {displayUser?.favorite_verse && (
+   738→                  <div className="mt-4 p-3 bg-slate-950/40 rounded-xl border border-white/[0.04] relative">
+   739→                    <span className="text-[9px] uppercase tracking-wider font-extrabold text-slate-500 block mb-1">Favorite Scripture</span>
+   740→                    <p className="text-[11px] font-bold italic text-slate-200 leading-relaxed">"{displayUser.favorite_verse}"</p>
+   741→                  </div>
+   742→                )}
+   743→              </div>
+   744→            </div>
+   745→
+   746→            {/* Spiritual Profile Enhancements Block */}
+   747→            <div className="mb-5 grid grid-cols-1 md:grid-cols-2 gap-4" id="spiritual-enhancements-block">
+   748→              {/* Faith Journey Timeline */}
+   749→              <div className="bg-white/[0.02] border border-white/[0.06] p-5 rounded-2xl flex flex-col justify-between">
+   750→                <div>
+   751→                  <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-4 flex items-center gap-1.5">
+   752→                    <Activity size={12} className="text-amber-400" /> Faith Journey Timeline
+   753→                  </h4>
+   754→                  
+   755→                  <div className="space-y-4 relative pl-4 before:absolute before:left-1 before:top-2 before:bottom-2 before:w-0.5 before:bg-white/10">
+   756→                    {/* Acceptance */}
+   757→                    <div className="relative">
+   758→                      <div className="absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-4 ring-amber-400/20" />
+   759→                      <p className="text-[10px] font-extrabold uppercase tracking-wide text-amber-400">Decision of Faith</p>
+   760→                      <p className="text-xs text-slate-300 font-medium leading-relaxed mt-0.5">
+   761→                        {displayUser?.testimony_milestone || "Accepted Christ & decided to live fully for Him."}
+   762→                      </p>
+   763→                    </div>
+   764→
+   765→                    {/* Baptism */}
+   766→                    <div className="relative">
+   767→                      <div className={`absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full ring-4 ${displayUser?.baptized === 'Yes' ? 'bg-[#3B82F6]' : displayUser?.baptized === 'Exploring' ? 'bg-amber-400' : 'bg-slate-500'}`} style={displayUser?.baptized === 'Yes' ? { boxShadow: '0 0 12px #3B82F630' } : {}} />
+   768→                      <p className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Water Baptism</p>
+   769→                      <p className="text-xs text-slate-300 font-medium leading-relaxed mt-0.5">
+   770→                        {displayUser?.baptized === 'Yes' 
+   771→                          ? `💧 Water Baptism: Walked in public confession of faith.` 
+   772→                          : displayUser?.baptized === 'Exploring' 
+   773→                            ? `🌱 Seeking Baptism: Actively exploring spiritual depths.`
+   774→                            : `🌿 Learning and seeking truth daily.`}
+   775→                      </p>
+   776→                    </div>
+   777→
+   778→                    {/* Church Fellowship */}
+   779→                    {displayUser?.church_name && (
+   780→                      <div className="relative">
+   781→                        <div className="absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-4 ring-emerald-400/20" />
+   782→                        <p className="text-[10px] font-extrabold uppercase tracking-wide text-emerald-400">Home Church Fellowship</p>
+   783→                        <p className="text-xs text-slate-300 font-medium leading-relaxed mt-0.5">
+   784→                          ⛪ Regular fellowship & growing in grace at {displayUser.church_name}.
+   785→                        </p>
+   786→                      </div>
+   787→                    )}
+   788→
+   789→                    {/* CrossCrafted */}
+   790→                    <div className="relative">
+   791→                      <div className="absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full bg-[#A855F7] ring-4 ring-[#A855F7]/20 animate-pulse" />
+   792→                      <p className="text-[10px] font-extrabold uppercase tracking-wide text-[#A855F7]">CrossCrafted Community</p>
+   793→                      <p className="text-xs text-slate-300 font-medium leading-relaxed mt-0.5">
+   794→                        🤝 Connected with believers in {displayUser?.state || 'India'} through CrossCrafted.
+   795→                      </p>
+   796→                    </div>
+   797→                  </div>
+   798→                </div>
+   799→              </div>
+   800→
+   801→              {/* Worship Songs & Ministries */}
+   802→              <div className="space-y-4">
+   803→                {/* Favorite Worship Songs */}
+   804→                <div className="bg-white/[0.02] border border-white/[0.06] p-5 rounded-2xl">
+   805→                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#EC4899] mb-3 flex items-center gap-1.5">
+   806→                    <Music size={12} className="text-[#EC4899]" /> Favorite Worship Songs
+   807→                  </h4>
+   808→                  <div className="space-y-2">
+   809→                    {(displayUser?.worship_songs || "Goodness of God, Yet Not I But Through Christ In Me, Way Maker")
+   810→                      .split(',')
+   811→                      .map((song, idx) => (
+   812→                        <div key={idx} className="flex items-center justify-between p-2 bg-slate-950/40 border border-white/[0.03] rounded-xl hover:bg-slate-950/60 transition-all">
+   813→                          <div className="flex items-center gap-2.5 min-w-0">
+   814→                            <div className="w-6 h-6 rounded-lg bg-[#EC4899]/10 border border-[#EC4899]/20 flex items-center justify-center text-[#EC4899] shrink-0 font-bold text-[9px]">
+   815→                              0{idx+1}
+   816→                            </div>
+   817→                            <div className="min-w-0">
+   818→                              <p className="text-[11px] font-bold text-white truncate leading-tight">{song.trim()}</p>
+   819→                              <p className="text-[9px] text-[#64748B] font-medium leading-none mt-0.5">Anchoring Worship Melody</p>
+   820→                            </div>
+   821→                          </div>
+   822→                          <button className="w-5 h-5 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:bg-[#EC4899]/20 hover:text-[#EC4899] transition-colors shrink-0">
+   823→                            <Music size={9} />
+   824→                          </button>
+   825→                        </div>
+   826→                    ))}
+   827→                  </div>
+   828→                </div>
+   829→
+   830→                {/* Ministries Involved */}
+   831→                <div className="bg-white/[0.02] border border-white/[0.06] p-5 rounded-2xl">
+   832→                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#3B82F6] mb-3 flex items-center gap-1.5">
+   833→                    <Church size={12} className="text-[#3B82F6]" /> Active Ministries
+   834→                  </h4>
+   835→                  <div className="flex flex-wrap gap-1.5">
+   836→                    {(displayUser?.ministries || "Worship Team, Intercessory Prayer, Youth Fellowship")
+   837→                      .split(',')
+   838→                      .map((ministry, idx) => (
+   839→                        <span key={idx} className="px-2.5 py-1.5 bg-[#3B82F6]/10 border border-[#3B82F6]/20 rounded-xl text-[11px] font-semibold text-slate-200 flex items-center gap-1">
+   840→                          <Sparkles size={9} className="text-[#3B82F6]" /> {ministry.trim()}
+   841→                        </span>
+   842→                    ))}
+   843→                  </div>
+   844→                </div>
+   845→              </div>
+   846→            </div>
+   847→
+   848→            {/* Interests & Hobbies Tags */}
+   849→            {displayUser?.interests && displayUser.interests.length > 0 && (
+   850→              <div className="mb-5">
+   851→                <h3 className="text-xs font-bold uppercase tracking-wider text-[#64748B] mb-2">Interests & Spiritual Tags</h3>
+   852→                <div className="flex flex-wrap gap-1.5">
+   853→                  {displayUser.interests.map(interest => (
+   854→                    <span key={interest} className="px-2.5 py-1 bg-white/[0.03] text-slate-300 border border-white/[0.06] rounded-xl text-xs font-bold">
+   855→                      {interest}
+   856→                    </span>
+   857→                  ))}
+   858→                </div>
+   859→              </div>
+   860→            )}
+   861→            
+   862→            {/* Trivia Points Banner */}
+   863→            {displayUser?.trivia_points > 0 && (
+   864→              <div className="mb-4 bg-amber-500/10 border border-amber-500/20 p-3 rounded-2xl flex items-center justify-between">
+   865→                <div className="flex items-center gap-2">
+   866→                  <div className="w-8 h-8 rounded-xl bg-amber-400/10 flex items-center justify-center text-amber-400">
+   867→                    <Award size={16} />
+   868→                  </div>
+   869→                  <div>
+   870→                    <span className="text-[9px] uppercase font-bold tracking-widest text-amber-400 block">Bible Scholar Rank</span>
+   871→                    <span className="text-xs font-extrabold text-white">
+   872→                      {displayUser.trivia_points >= 300 ? 'Theology Scholar' : displayUser.trivia_points >= 150 ? 'Bible Teacher' : displayUser.trivia_points >= 50 ? 'Spiritual Disciple' : 'Faith Seeker'}
+   873→                    </span>
+   874→                  </div>
+   875→                </div>
+   876→                <div className="text-right">
+   877→                  <span className="text-xs font-black text-amber-400 block">{displayUser.trivia_points} Points</span>
+   878→                  {displayUser.trivia_stats && (
+   879→                    <span className="text-[9px] text-[#64748B] block">
+   880→                      Accuracy: {Math.round((displayUser.trivia_stats.totalCorrect / Math.max(1, displayUser.trivia_stats.totalAttempted)) * 100)}%
+   881→                    </span>
+   882→                  )}
+   883→                </div>
+   884→              </div>
+   885→            )}
+   886→
+   887→            {/* Stats */}
+   888→            <div className="grid grid-cols-3 gap-3 p-3 md:p-4 bg-[#0F172A] border border-white/[0.08] rounded-2xl">
+   889→              <div className="text-center cursor-pointer" onClick={() => setActiveTab('posts')}>
+   890→                <p className="text-xl md:text-2xl font-bold" style={{ fontFamily: 'Outfit, sans-serif' }}>
+   891→                  {displayUser?.posts_count || userPosts.length}
+   892→                </p>
+   893→                <p className="text-xs md:text-sm text-[#94A3B8]">Posts</p>
+   894→              </div>
+   895→              <div className="text-center cursor-pointer" onClick={() => { setActiveTab('followers'); fetchFollowers(displayUser?._id || currentUser?._id); }}>
+   896→                <p className="text-xl md:text-2xl font-bold" style={{ fontFamily: 'Outfit, sans-serif' }}>
+   897→                  {displayUser?.followers_count || 0}
+   898→                </p>
+   899→                <p className="text-xs md:text-sm text-[#94A3B8]">Followers</p>
+   900→              </div>
+   901→              <div className="text-center cursor-pointer" onClick={() => { setActiveTab('following'); fetchFollowing(displayUser?._id || currentUser?._id); }}>
+   902→                <p className="text-xl md:text-2xl font-bold" style={{ fontFamily: 'Outfit, sans-serif' }}>
+   903→                  {displayUser?.following_count || 0}
+   904→                </p>
+   905→                <p className="text-xs md:text-sm text-[#94A3B8]">Following</p>
+   906→              </div>
+   907→            </div>
+   908→          </>
+   909→        )}
+   910→      </motion.div>
+   911→
+   912→      {/* Tabs */}
+   913→      <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1 scrollbar-none">
+   914→        <button
+   915→          onClick={() => setActiveTab('posts')}
+   916→          className={`px-3.5 py-2 rounded-full text-[13px] font-semibold border border-white/[0.08] transition-all whitespace-nowrap ${
+   917→            activeTab === 'posts' ? 'bg-[#A855F7] text-white' : 'bg-white/[0.04] text-[#94A3B8] hover:bg-white/[0.08]'
+   918→          }`}
+   919→          data-testid="posts-tab"
+   920→        >
+   921→          Posts ({userPosts.length})
+   922→        </button>
+   923→        {isOwnProfile && (
+   924→          <button
+   925→            onClick={() => setActiveTab('saved')}
+   926→            className={`px-3.5 py-2 rounded-full text-[13px] font-semibold border border-white/[0.08] transition-all whitespace-nowrap ${
+   927→              activeTab === 'saved' ? 'bg-[#3B82F6] text-white' : 'bg-white/[0.04] text-[#94A3B8] hover:bg-white/[0.08]'
+   928→            }`}
+   929→            data-testid="saved-tab"
+   930→          >
+   931→            <Bookmark size={14} strokeWidth={2.5} className="inline mr-1" />
+   932→            Saved ({savedPosts.length})
+   933→          </button>
+   934→        )}
+   935→        <button
+   936→          onClick={() => setActiveTab('events')}
+   937→          className={`px-3.5 py-2 rounded-full text-[13px] font-semibold border border-white/[0.08] transition-all whitespace-nowrap ${
+   938→            activeTab === 'events' ? 'bg-[#EC4899] text-white' : 'bg-white/[0.04] text-[#94A3B8] hover:bg-white/[0.08]'
+   939→          }`}
+   940→          data-testid="events-tab"
+   941→        >
+   942→          <Calendar size={14} strokeWidth={2.5} className="inline mr-1" />
+   943→          Events ({(userEvents.created?.length || 0) + (userEvents.attending?.length || 0)})
+   944→        </button>
+   945→        <button
+   946→          onClick={() => { setActiveTab('followers'); fetchFollowers(displayUser?._id || currentUser?._id); }}
+   947→          className={`px-3.5 py-2 rounded-full text-[13px] font-semibold border border-white/[0.08] transition-all whitespace-nowrap ${
+   948→            activeTab === 'followers' ? 'bg-[#6366F1] text-white' : 'bg-white/[0.04] text-[#94A3B8] hover:bg-white/[0.08]'
+   949→          }`}
+   950→          data-testid="followers-tab"
+   951→        >
+   952→          Followers ({displayUser?.followers_count || 0})
+   953→        </button>
+   954→        <button
+   955→          onClick={() => { setActiveTab('following'); fetchFollowing(displayUser?._id || currentUser?._id); }}
+   956→          className={`px-3.5 py-2 rounded-full text-[13px] font-semibold border border-white/[0.08] transition-all whitespace-nowrap ${
+   957→            activeTab === 'following' ? 'bg-white/[0.15] text-white' : 'bg-white/[0.04] text-[#94A3B8] hover:bg-white/[0.08]'
+   958→          }`}
+   959→          data-testid="following-tab"
+   960→        >
+   961→          Following ({displayUser?.following_count || 0})
+   962→        </button>
+   963→      </div>
+   964→
+   965→      {/* Content */}
+   966→      {activeTab === 'posts' && (
+   967→        <div className="space-y-3">
+   968→          {isOwnProfile && (
+   969→            <motion.div
+   970→              initial={{ opacity: 0, y: 10 }}
+   971→              animate={{ opacity: 1, y: 0 }}
+   972→              className="bg-white/[0.04] rounded-2xl border border-white/[0.06] p-4 md:p-5 mb-5"
+   973→              data-testid="create-post-card"
+   974→            >
+   975→              <form onSubmit={handleCreatePost}>
+   976→                <div className="flex gap-3 mb-3">
+   977→                  <div className="w-10 h-10 rounded-full bg-[#6366F1] shrink-0 border border-white/[0.08] flex items-center justify-center font-bold text-sm">
+   978→                    {currentUser?.name?.charAt(0).toUpperCase()}
+   979→                  </div>
+   980→                  <div className="flex-1">
+   981→                    <textarea
+   982→                      value={postContent}
+   983→                      onChange={(e) => setPostContent(e.target.value)}
+   984→                      placeholder="What's on your mind? Share a thought or testimony..."
+   985→                      className="w-full bg-transparent border-0 p-0 text-[15px] text-[#E2E8F0] placeholder-[#64748B] focus:ring-0 resize-none min-h-[80px]"
+   986→                      data-testid="create-post-textarea"
+   987→                    />
+   988→                  </div>
+   989→                </div>
+   990→
+   991→                {postImagePreview && (
+   992→                  <div className="relative mb-4 rounded-xl overflow-hidden border border-white/[0.08] max-h-[300px]">
+   993→                    <img src={postImagePreview} alt="Selected preview" className="w-full h-full object-cover" />
+   994→                    <button
+   995→                      type="button"
+   996→                      onClick={() => {
+   997→                        setPostImage(null);
+   998→                        setPostImagePreview(null);
+   999→                      }}
+  1000→                      className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 rounded-full text-white transition-colors"
+  1001→                      data-testid="remove-post-image"
+  1002→                    >
+  1003→                      <X size={16} />
+  1004→                    </button>
+  1005→                  </div>
+  1006→                )}
+  1007→
+  1008→                <div className="flex items-center justify-between border-t border-white/[0.06] pt-3">
+  1009→                  <button
+  1010→                    type="button"
+  1011→                    onClick={() => postFileInputRef.current?.click()}
+  1012→                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] text-xs font-semibold text-[#CBD5E1] transition-all"
+  1013→                    data-testid="add-post-image-btn"
+  1014→                  >
+  1015→                    <Camera size={14} className="text-[#A855F7]" />
+  1016→                    <span>Add Photo</span>
+  1017→                  </button>
+  1018→                  <input
+  1019→                    ref={postFileInputRef}
+  1020→                    type="file"
+  1021→                    accept="image/*"
+  1022→                    onChange={handlePostImageSelect}
+  1023→                    className="hidden"
+  1024→                  />
+  1025→
+  1026→                  <button
+  1027→                    type="submit"
+  1028→                    disabled={creatingPost || !postContent.trim()}
+  1029→                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+  1030→                      postContent.trim()
+  1031→                        ? 'bg-[#A855F7] text-white hover:bg-[#8B5CF6] hover:-translate-y-0.5'
+  1032→                        : 'bg-white/[0.02] text-[#64748B] border border-white/[0.06] cursor-not-allowed'
+  1033→                    }`}
+  1034→                    data-testid="submit-post-btn"
+  1035→                  >
+  1036→                    {creatingPost ? 'Posting...' : 'Post'}
+  1037→                  </button>
+  1038→                </div>
+  1039→              </form>
+  1040→            </motion.div>
+  1041→          )}
+  1042→
+  1043→          {userPosts.length === 0 ? (
+  1044→            <div className="text-center py-12 bg-white/[0.04] rounded-2xl border border-white/[0.06]">
+  1045→              <p className="text-[#94A3B8] text-sm">No posts yet.</p>
+  1046→            </div>
+  1047→          ) : (
+  1048→            userPosts.map((post) => (
+  1049→              <PostCard key={post._id} post={post} currentUserId={currentUser?._id} onLike={handleLike} />
+  1050→            ))
+  1051→          )}
+  1052→        </div>
+  1053→      )}
+  1054→
+  1055→      {activeTab === 'saved' && (
+  1056→        <div className="space-y-3">
+  1057→          {savedPosts.length === 0 ? (
+  1058→            <div className="text-center py-12 bg-white/[0.04] rounded-2xl border border-white/[0.06]">
+  1059→              <Bookmark size={40} strokeWidth={2} className="mx-auto mb-3 text-[#475569]" />
+  1060→              <p className="text-[#94A3B8] text-sm">No saved posts yet.</p>
+  1061→            </div>
+  1062→          ) : (
+  1063→            savedPosts.map((post) => (
+  1064→              <PostCard key={post._id} post={post} currentUserId={currentUser?._id} onLike={handleLike} showAuthor authorName={post.user_name} authorInitial={post.user_name?.charAt(0)} authorUsername={post.user_username} />
+  1065→            ))
+  1066→          )}
+  1067→        </div>
+  1068→      )}
+  1069→
+  1070→      {activeTab === 'events' && (
+  1071→        <div className="space-y-4">
+  1072→          {userEvents.created && userEvents.created.length > 0 && (
+  1073→            <div>
+  1074→              <h3 className="text-lg font-bold mb-3" style={{ fontFamily: 'Outfit, sans-serif' }}>Created Events</h3>
+  1075→              <div className="space-y-3">
+  1076→                {userEvents.created.map((event) => (
+  1077→                  <EventCard key={event._id} event={event} showAction={false} badge={{ label: 'Created', color: 'bg-[#EC4899]' }} />
+  1078→                ))}
+  1079→              </div>
+  1080→            </div>
+  1081→          )}
+  1082→
+  1083→          {userEvents.attending && userEvents.attending.length > 0 && (
+  1084→            <div>
+  1085→              <h3 className="text-lg font-bold mb-3" style={{ fontFamily: 'Outfit, sans-serif' }}>Attending Events</h3>
+  1086→              <div className="space-y-3">
+  1087→                {userEvents.attending.map((event) => (
+  1088→                  <EventCard key={event._id} event={event} showAction={false} badge={{ label: 'Attending', color: 'bg-[#3B82F6]' }} />
+  1089→                ))}
+  1090→              </div>
+  1091→            </div>
+  1092→          )}
+  1093→
+  1094→          {(!userEvents.created || userEvents.created.length === 0) && 
+  1095→           (!userEvents.attending || userEvents.attending.length === 0) && (
+  1096→            <div className="text-center py-12 bg-white/[0.04] rounded-2xl border border-white/[0.06]">
+  1097→              <Calendar size={40} strokeWidth={2} className="mx-auto mb-3 text-[#475569]" />
+  1098→              <p className="text-[#94A3B8] text-sm">No events yet.</p>
+  1099→            </div>
+  1100→          )}
+  1101→        </div>
+  1102→      )}
+  1103→
+  1104→      {activeTab === 'followers' && (
+  1105→        <FollowList
+  1106→          users={followersList}
+  1107→          loading={loadingFollow}
+  1108→          emptyText="No followers yet"
+  1109→          currentUserId={currentUser?._id}
+  1110→          onFollow={async (uid) => {
+  1111→            try {
+  1112→              await api.post('/api/users/${uid}/follow', {});
+  1113→              toast.success('Following!');
+  1114→              fetchFollowers(displayUser?._id || currentUser?._id);
+  1115→            } catch (_) { toast.error('Failed'); }
+  1116→          }}
+  1117→          onUnfollow={async (uid) => {
+  1118→            try {
+  1119→              await api.delete('/api/users/${uid}/follow');
+  1120→              toast.success('Unfollowed');
+  1121→              fetchFollowers(displayUser?._id || currentUser?._id);
+  1122→            } catch (_) { toast.error('Failed'); }
+  1123→          }}
+  1124→          navigate={navigate}
+  1125→        />
+  1126→      )}
+  1127→
+  1128→      {activeTab === 'following' && (
+  1129→        <FollowList
+  1130→          users={followingList}
+  1131→          loading={loadingFollow}
+  1132→          emptyText="Not following anyone yet"
+  1133→          currentUserId={currentUser?._id}
+  1134→          onFollow={async (uid) => {
+  1135→            try {
+  1136→              await api.post('/api/users/${uid}/follow', {});
+  1137→              toast.success('Following!');
+  1138→              fetchFollowing(displayUser?._id || currentUser?._id);
+  1139→            } catch (_) { toast.error('Failed'); }
+  1140→          }}
+  1141→          onUnfollow={async (uid) => {
+  1142→            try {
+  1143→              await api.delete('/api/users/${uid}/follow');
+  1144→              toast.success('Unfollowed');
+  1145→              fetchFollowing(displayUser?._id || currentUser?._id);
+  1146→            } catch (_) { toast.error('Failed'); }
+  1147→          }}
+  1148→          navigate={navigate}
+  1149→        />
+  1150→      )}
+  1151→
+  1152→      {showReportModal && (
+  1153→        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" data-testid="report-modal" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">
+  1154→          <div className="bg-[#121212] border border-white/[0.08] rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-fade-in">
+  1155→            <div className="p-6 border-b border-white/[0.06] flex items-center justify-between">
+  1156→              <h3 className="text-lg font-bold flex items-center gap-2 text-white" style={{ fontFamily: 'Outfit, sans-serif' }}>
+  1157→                <ShieldAlert className="text-amber-500" size={20} />
+  1158→                Report User
+  1159→              </h3>
+  1160→              <button 
+  1161→                type="button"
+  1162→                onClick={() => setShowReportModal(false)}
+  1163→                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/[0.04] transition-all"
+  1164→              >
+  1165→                <X size={18} />
+  1166→              </button>
+  1167→            </div>
+  1168→            
+  1169→            <form onSubmit={handleReportSubmit} className="p-6 space-y-4">
+  1170→              <div>
+  1171→                <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-2">
+  1172→                  Why are you reporting this user?
+  1173→                </label>
+  1174→                <select
+  1175→                  value={reportReason}
+  1176→                  onChange={(e) => setReportReason(e.target.value)}
+  1177→                  className="neo-input w-full"
+  1178→                  data-testid="report-reason-select"
+  1179→                >
+  1180→                  <option value="harassment">Harassment or abusive messaging</option>
+  1181→                  <option value="spam">Spam or unwanted advertising</option>
+  1182→                  <option value="impersonation">Impersonation or fake account</option>
+  1183→                  <option value="inappropriate_content">Inappropriate profile photos or details</option>
+  1184→                  <option value="other">Other safety concern</option>
+  1185→                </select>
+  1186→              </div>
+  1187→
+  1188→              <div>
+  1189→                <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-2">
+  1190→                  Details / Evidence
+  1191→                </label>
+  1192→                <textarea
+  1193→                  value={reportDetails}
+  1194→                  onChange={(e) => setReportDetails(e.target.value)}
+  1195→                  className="neo-input w-full h-32 resize-none"
+  1196→                  placeholder="Please describe what happened. If they sent harassing messages, mention it here. Our admins will investigate immediately."
+  1197→                  required
+  1198→                  data-testid="report-details-input"
+  1199→                />
+  1200→              </div>
+  1201→
+  1202→              <div className="flex gap-2 pt-2">
+  1203→                <button
+  1204→                  type="button"
+  1205→                  onClick={() => setShowReportModal(false)}
+  1206→                  className="neo-button-outline w-1/2"
+  1207→                >
+  1208→                  Cancel
+  1209→                </button>
+  1210→                <button
+  1211→                  type="submit"
+  1212→                  disabled={submittingReport}
+  1213→                  className="neo-button-primary w-1/2 flex items-center justify-center gap-2"
+  1214→                  style={{ background: '#F59E0B', border: 'none' }}
+  1215→                  data-testid="submit-report-btn"
+  1216→                >
+  1217→                  {submittingReport ? 'Submitting...' : 'Submit Report'}
+  1218→                </button>
+  1219→              </div>
+  1220→            </form>
+  1221→          </div>
+  1222→        </div>
+  1223→      )}
+  1224→    </div>
+  1225→  );
+  1226→};
+  1227→
+  1228→export default UserProfile;
+  1229→

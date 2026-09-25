@@ -155,7 +155,7 @@ export default function AdminTrivia() {
     if (!window.confirm(confirmMessage)) return;
 
     try {
-      await api.delete('/api/admin/trivia/${id}');
+      await api.delete(`/api/admin/trivia/${id}`);
       setQuestions(prev => prev.filter(q => q._id !== id));
       toast.success('Question deleted successfully');
     } catch (err) {
@@ -195,7 +195,7 @@ export default function AdminTrivia() {
     }
 
     try {
-      const res = await api.put('/api/admin/trivia/${id}', {
+      const res = await api.put(`/api/admin/trivia/${id}`, {
         question,
         difficulty,
         options,

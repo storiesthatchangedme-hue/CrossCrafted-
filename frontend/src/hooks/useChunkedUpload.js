@@ -49,13 +49,13 @@ export function useChunkedUpload() {
         fd.append('chunk_index', i.toString());
         fd.append('file', chunk, `chunk_${i}`);
 
-        await api.post('/api/upload/chunk/${uploadId}', fd, uploadConfig());
+        await api.post(`/api/upload/chunk/${uploadId}`, fd, uploadConfig());
         setProgress(Math.round(((i + 1) / totalChunks) * 90)); // 0-90% for chunks
       }
 
       // 3. Finalize
       const { data: finalData } = await api.post(
-        '/api/upload/finalize/${uploadId}',
+        `/api/upload/finalize/${uploadId}`,
         {}
       );
       setProgress(100);

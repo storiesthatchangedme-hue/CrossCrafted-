@@ -14,7 +14,7 @@ const AdminUsers = () => {
 
   const fetchUsers = useCallback(async (q = '') => {
     try {
-      const { data } = await api.get('/api/admin/users?search=${encodeURIComponent(q)}');
+      const { data } = await api.get(`/api/admin/users?search=${encodeURIComponent(q)}`);
       setUsers(data.users);
       setTotal(data.total);
     } catch (_) {
@@ -30,7 +30,7 @@ const AdminUsers = () => {
 
   const handleChangeRole = async (userId, newRole) => {
     try {
-      await api.put('/api/admin/users/${userId}/role', { role: newRole });
+      await api.put(`/api/admin/users/${userId}/role`, { role: newRole });
       toast.success(`Role updated to ${newRole}`);
       setEditingRole(null);
       fetchUsers(search);
@@ -41,7 +41,7 @@ const AdminUsers = () => {
 
   const handleToggleVerify = async (userId, currentlyVerified) => {
     try {
-      await api.put('/api/admin/users/${userId}/verify', { is_verified: !currentlyVerified });
+      await api.put(`/api/admin/users/${userId}/verify`, { is_verified: !currentlyVerified });
       toast.success(currentlyVerified ? 'Verification removed' : 'User verified');
       fetchUsers(search);
     } catch (error) {
@@ -52,7 +52,7 @@ const AdminUsers = () => {
   const handleDelete = async (userId, name) => {
     if (!window.confirm(`Delete user "${name}" and all their content?`)) return;
     try {
-      await api.delete('/api/admin/users/${userId}');
+      await api.delete(`/api/admin/users/${userId}`);
       toast.success('User deleted');
       fetchUsers(search);
     } catch (error) {

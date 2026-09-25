@@ -33,7 +33,7 @@ const AdminChurches = () => {
       const params = new URLSearchParams();
       if (q) params.set('search', q);
       if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
-      const { data } = await api.get('/api/admin/churches?${params.toString()}');
+      const { data } = await api.get(`/api/admin/churches?${params.toString()}`);
       setChurches(data.churches);
       setTotal(data.total);
     } catch (_) {
@@ -49,7 +49,7 @@ const AdminChurches = () => {
 
   const handleStatus = async (churchId, status) => {
     try {
-      await api.put('/api/admin/churches/${churchId}/status', { status });
+      await api.put(`/api/admin/churches/${churchId}/status`, { status });
       toast.success(`Church ${status}`);
       fetchChurches(search, tab);
     } catch (_) {
@@ -60,7 +60,7 @@ const AdminChurches = () => {
   const handleDelete = async (churchId, name) => {
     if (!window.confirm(`Delete church "${name}"? This cannot be undone.`)) return;
     try {
-      await api.delete('/api/admin/churches/${churchId}');
+      await api.delete(`/api/admin/churches/${churchId}`);
       toast.success('Church deleted');
       fetchChurches(search, tab);
     } catch (_) {

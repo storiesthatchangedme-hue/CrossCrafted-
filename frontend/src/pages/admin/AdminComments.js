@@ -13,7 +13,7 @@ const AdminComments = () => {
 
   const fetchComments = useCallback(async (q = '') => {
     try {
-      const { data } = await api.get('/api/admin/comments?search=${encodeURIComponent(q)}&limit=100');
+      const { data } = await api.get(`/api/admin/comments?search=${encodeURIComponent(q)}&limit=100`);
       setComments(data.comments);
       setTotal(data.total);
     } catch (_) {
@@ -30,7 +30,7 @@ const AdminComments = () => {
   const handleDelete = async (postId, commentId) => {
     if (!window.confirm('Delete this comment?')) return;
     try {
-      await api.delete('/api/admin/comments/${postId}/${commentId}');
+      await api.delete(`/api/admin/comments/${postId}/${commentId}`);
       toast.success('Comment deleted');
       setComments(prev => prev.filter(c => c.comment_id !== commentId));
       setTotal(prev => prev - 1);

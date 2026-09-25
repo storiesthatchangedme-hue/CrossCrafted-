@@ -38,7 +38,7 @@ const Messages = () => {
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
-        const { data } = await api.get('/api/search?q=${encodeURIComponent(searchQuery)}&limit=8');
+        const { data } = await api.get(`/api/search?q=${encodeURIComponent(searchQuery)}&limit=8`);
         setSearchResults((data.users || []).filter(u => u._id !== user?._id));
       } catch (_) {}
       finally { setSearching(false); }

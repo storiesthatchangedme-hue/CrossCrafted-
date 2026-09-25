@@ -21,7 +21,7 @@ const EventDetail = () => {
 
   const fetchEvent = useCallback(async () => {
     try {
-      const { data } = await api.get('/api/events/${eventId}');
+      const { data } = await api.get(`/api/events/${eventId}`);
       setEvent(data);
     } catch (_) {
       toast.error('Event not found');
@@ -33,8 +33,8 @@ const EventDetail = () => {
 
   const fetchAttendees = useCallback(async () => {
     try {
-      const { data } = await api.get('/api/events/${eventId}/attendees');
-      setAttendees(data);
+      const { data } = await api.get(`/api/events/${eventId}/attendees`);
+      setAttendees(Array.isArray(data) ? data : []);
     } catch (_) {
       /* attendees fetch non-critical */
     }
@@ -49,10 +49,10 @@ const EventDetail = () => {
     setRegistering(true);
     try {
       if (event.is_registered) {
-        await api.delete('/api/events/${eventId}/register');
+        await api.delete(`/api/events/${eventId}/register`);
         toast.success('Registration cancelled');
       } else {
-        await api.post('/api/events/${eventId}/register', {});
+        await api.post(`/api/events/${eventId}/register`, {});
         toast.success("You're going!");
       }
       fetchEvent();

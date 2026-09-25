@@ -79,9 +79,9 @@ const Feed = () => {
   const handleLike = async (testimonyId, isLiked) => {
     try {
       if (isLiked) {
-        await api.delete('/api/testimonies/${testimonyId}/like');
+        await api.delete(`/api/testimonies/${testimonyId}/like`);
       } else {
-        await api.post('/api/testimonies/${testimonyId}/like', {});
+        await api.post(`/api/testimonies/${testimonyId}/like`, {});
       }
       fetchTestimonies();
     } catch (_) {
