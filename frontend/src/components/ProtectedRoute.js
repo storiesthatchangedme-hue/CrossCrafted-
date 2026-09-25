@@ -1,8 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { Navigate } from 'react-router-dom';
 
 export const ProtectedRoute = ({ children }) => {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
 
   if (loading) {
     return (
@@ -15,25 +14,15 @@ export const ProtectedRoute = ({ children }) => {
     );
   }
 
-  // Not authenticated at all → redirect to login
-  if (!user || user === false) {
-    return <Navigate to="/login" replace />;
-  }
-
-  // Admin users bypass onboarding checks
-  if (user.role === 'admin') {
-    return children;
-  }
-
-  // Rejected accounts → redirect to login with error
-  if (user.status === 'rejected') {
-    return <Navigate to="/login" replace state={{ error: 'Your account has been rejected.' }} />;
-  }
-
-  // Onboarding not complete → redirect to onboarding
-  if (!user.onboarding_complete) {
-    return <Navigate to="/onboarding" replace />;
-  }
-
+  // Auth gate disabled — signup/login closed for now.
+  // Everyone can browse freely. Re-enable the checks below when ready.
   return children;
+
+  // --- Original auth checks (re-enable when opening signup) ---
+  // const { user } = useAuth();
+  // if (!user || user === false) return <Navigate to="/login" replace />;
+  // if (user.role === 'admin') return children;
+  // if (user.status === 'rejected') return <Navigate to="/login" replace state={{ error: 'Your account has been rejected.' }} />;
+  // if (!user.onboarding_complete) return <Navigate to="/onboarding" replace />;
+  // return children;
 };
