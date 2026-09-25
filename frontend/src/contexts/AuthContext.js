@@ -131,10 +131,16 @@ export const AuthProvider = ({ children }) => {
   
   const loginWithGoogle = async () => {
     try {
+      // Use REACT_APP_SITE_URL if set (for production), otherwise fall back to current origin
+      // This prevents the redirect going to localhost when deployed on Vercel
+      const siteUrl = process.env.REACT_APP_SITE_URL || window.location.origin;
+      const redirectUrl = `${siteUrl}/auth/callback`;
+      console.log('[Google Auth] Redirecting to:', redirectUrl);
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin + '/auth/callback',
+          redirectTo: redirectUrl,
         },
       });
       if (error) throw error;
