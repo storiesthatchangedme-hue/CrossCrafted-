@@ -1,10 +1,11 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Users, Calendar, User, LogOut, Compass, ShoppingBag, Shield, Plus, Search, Bell, MessageCircle, Heart, Sparkles, Award, HeartHandshake, BookOpen, Building2, Store } from 'lucide-react';
+import { Users, Calendar, User, LogOut, Compass, ShoppingBag, Shield, Plus, Search, Bell, MessageCircle, Heart, Sparkles, Award, HeartHandshake, BookOpen, Building2, Store, BookMarked, UsersRound, Heart as WishlistIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '@/lib/api';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import AnnouncementBanner from '@/components/AnnouncementBanner';
 
 
 const AppLayout = () => {
@@ -64,15 +65,19 @@ const AppLayout = () => {
   const sidebarLinks = [
     { to: '/app/churches', icon: Search, label: 'Churches' },
     { to: '/app/events', icon: Calendar, label: 'Events' },
+    { to: '/app/bible-plans', icon: BookMarked, label: 'Bible Plans' },
+    { to: '/app/small-groups', icon: UsersRound, label: 'Small Groups' },
     { to: '/app/trivia', icon: Award, label: 'Bible Trivia' },
     { to: '/app/apologetics', icon: BookOpen, label: 'Apologetics' },
     { to: '/app/list-church', icon: Building2, label: 'List Your Church' },
     { to: '/app/marketplace', icon: Store, label: 'Marketplace' },
+    { to: '/app/wishlist', icon: WishlistIcon, label: 'Wishlist' },
     { to: '/app/prayer-wall', icon: HeartHandshake, label: 'Prayer Wall' },
   ];
 
   return (
     <div className="min-h-screen bg-[#12101A]">
+      <AnnouncementBanner />
       {/* Header — auto-hides on mobile scroll */}
       <header
         className={`sticky top-0 z-50 bg-[#12101A]/80 backdrop-blur-2xl border-b border-white/[0.04] transition-transform duration-300 ${

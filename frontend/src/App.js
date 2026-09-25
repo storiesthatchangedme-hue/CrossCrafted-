@@ -53,6 +53,12 @@ const AdminMarketplace = React.lazy(() => import("@/pages/admin/AdminMarketplace
 const Apologetics = React.lazy(() => import("@/pages/Apologetics"));
 const ListYourChurch = React.lazy(() => import("@/pages/ListYourChurch"));
 const ListYourBusiness = React.lazy(() => import("@/pages/ListYourBusiness"));
+const BiblePlans = React.lazy(() => import("@/pages/BiblePlans"));
+const SmallGroups = React.lazy(() => import("@/pages/SmallGroups"));
+const Wishlist = React.lazy(() => import("@/pages/Wishlist"));
+const AdminAnalytics = React.lazy(() => import("@/pages/admin/AdminAnalytics"));
+const AdminAnnouncements = React.lazy(() => import("@/pages/admin/AdminAnnouncements"));
+const AdminFeatureFlags = React.lazy(() => import("@/pages/admin/AdminFeatureFlags"));
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
 function AppRouter() {
@@ -94,6 +100,9 @@ function AppRouter() {
         <Route path="comments" element={<AdminComments />} />
         <Route path="trivia" element={<AdminTrivia />} />
         <Route path="logs" element={<AdminLogs />} />
+        <Route path="analytics" element={<AdminAnalytics />} />
+        <Route path="announcements" element={<AdminAnnouncements />} />
+        <Route path="feature-flags" element={<AdminFeatureFlags />} />
       </Route>
       {/* Main app */}
       <Route
@@ -123,6 +132,9 @@ function AppRouter() {
         <Route path="notifications" element={<Notifications />} />
         <Route path="messages" element={<Messages />} />
         <Route path="messages/:convoId" element={<Conversation />} />
+        <Route path="bible-plans" element={<BiblePlans />} />
+        <Route path="small-groups" element={<SmallGroups />} />
+        <Route path="wishlist" element={<Wishlist />} />
       </Route>
     </Routes>
       </Suspense>

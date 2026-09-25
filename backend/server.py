@@ -22,9 +22,11 @@ import subprocess
 import tempfile
 import shutil
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from models import *
 import uuid
+import hashlib
+import pyotp
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -1204,12 +1206,14 @@ async def create_event(event: EventCreate, user: dict = Depends(get_current_user
     return doc
 
 @api_router.get("/events")
-async def get_events(request: Request, skip: int = 0, limit: int = 20, state: str = "", language: str = "", search: str = ""):
+async def get_events(request: Request, skip: int = 0, limit: int = 20, state: str = "", language: str = "", search: str = "", category: str = ""):
     query = {}
     if state:
         query["state"] = state
     if language:
         query["languages"] = language
+    if category:
+        query["category"] = category
     if search:
         query["$or"] = [
             {"title": {"$regex": search, "$options": "i"}},
@@ -1377,11 +1381,30 @@ async def create_product(product: ProductCreate, user: dict = Depends(get_curren
     return doc
 
 @api_router.get("/products")
-async def get_products(request: Request, skip: int = 0, limit: int = 20, search: str = ""):
+async def get_products(request: Request, skip: int = 0, limit: int = 20, search: str = "", category: str = "", min_price: Optional[float] = None, max_price: Optional[float] = None, sort: str = ""):
     query = {}
     if search:
         query["title"] = {"$regex": search, "$options": "i"}
-    products = await db.products.find(query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    if category:
+        query["category"] = category
+    price_filter = {}
+    if min_price is not None:
+        price_filter["$gte"] = min_price
+    if max_price is not None:
+        price_filter["$lte"] = max_price
+    if price_filter:
+        query["price"] = price_filter
+    sort_field = "created_at"
+    sort_dir = -1
+    if sort == "price_asc":
+        sort_field, sort_dir = "price", 1
+    elif sort == "price_desc":
+        sort_field, sort_dir = "price", -1
+    elif sort == "newest":
+        sort_field, sort_dir = "created_at", -1
+    elif sort == "oldest":
+        sort_field, sort_dir = "created_at", 1
+    products = await db.products.find(query).sort(sort_field, sort_dir).skip(skip).limit(limit).to_list(limit)
     for p in products:
         p["_id"] = str(p["_id"])
         creator = await db.users.find_one({"_id": ObjectId(p["created_by"])}, {"_id": 1, "name": 1, "username": 1, "profile_image": 1})
@@ -2263,6 +2286,1058 @@ async def admin_get_logs(user: dict = Depends(require_admin), skip: int = 0, lim
     logs = await db.admin_logs.find(query, {"_id": 0}).sort("timestamp", -1).skip(skip).limit(limit).to_list(limit)
     total = await db.admin_logs.count_documents(query)
     return {"logs": logs, "total": total}
+
+# ══════════════════════════════════════════════════════════════════
+# 1. BIBLE READING PLANS
+# ══════════════════════════════════════════════════════════════════
+
+@api_router.post("/bible-plans")
+async def create_bible_plan(plan: BiblePlanCreate, user: dict = Depends(get_current_user)):
+    """Create a Bible reading plan."""
+    doc = {
+        "title": plan.title,
+        "description": plan.description,
+        "duration_days": plan.duration_days,
+        "daily_readings": [r.model_dump() for r in plan.daily_readings],
+        "created_by": user["_id"],
+        "is_public": True,
+        "enrolled_count": 0,
+        "created_at": datetime.now(timezone.utc)
+    }
+    result = await db.bible_reading_plans.insert_one(doc)
+    doc["_id"] = str(result.inserted_id)
+    return doc
+
+@api_router.get("/bible-plans")
+async def get_bible_plans(skip: int = 0, limit: int = 20):
+    """List all public Bible reading plans."""
+    plans = await db.bible_reading_plans.find({"is_public": True}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    for p in plans:
+        p["_id"] = str(p["_id"])
+    return plans
+
+@api_router.get("/bible-plans/{plan_id}")
+async def get_bible_plan(plan_id: str, request: Request):
+    """Get a Bible reading plan with user's progress if logged in."""
+    plan = await db.bible_reading_plans.find_one({"_id": ObjectId(plan_id)})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    plan["_id"] = str(plan["_id"])
+    # Try to get current user's progress
+    try:
+        current = await get_current_user(request)
+        progress = await db.bible_plan_progress.find_one({"plan_id": plan_id, "user_id": current["_id"]})
+        plan["my_progress"] = progress.get("completed_days", []) if progress else []
+        plan["is_enrolled"] = progress is not None
+    except Exception:
+        plan["my_progress"] = []
+        plan["is_enrolled"] = False
+    return plan
+
+@api_router.post("/bible-plans/{plan_id}/enroll")
+async def enroll_bible_plan(plan_id: str, user: dict = Depends(get_current_user)):
+    """Enroll in a Bible reading plan."""
+    plan = await db.bible_reading_plans.find_one({"_id": ObjectId(plan_id)})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    existing = await db.bible_plan_progress.find_one({"plan_id": plan_id, "user_id": user["_id"]})
+    if existing:
+        raise HTTPException(status_code=400, detail="Already enrolled")
+    await db.bible_plan_progress.insert_one({
+        "plan_id": plan_id,
+        "user_id": user["_id"],
+        "completed_days": [],
+        "enrolled_at": datetime.now(timezone.utc)
+    })
+    await db.bible_reading_plans.update_one({"_id": ObjectId(plan_id)}, {"$inc": {"enrolled_count": 1}})
+    return {"message": "Enrolled successfully"}
+
+@api_router.post("/bible-plans/{plan_id}/complete-day")
+async def complete_bible_day(plan_id: str, body: dict, user: dict = Depends(get_current_user)):
+    """Mark a day as complete in a Bible reading plan."""
+    day_number = body.get("day_number")
+    if not day_number:
+        raise HTTPException(status_code=400, detail="day_number required")
+    progress = await db.bible_plan_progress.find_one({"plan_id": plan_id, "user_id": user["_id"]})
+    if not progress:
+        raise HTTPException(status_code=400, detail="Not enrolled in this plan")
+    await db.bible_plan_progress.update_one(
+        {"plan_id": plan_id, "user_id": user["_id"]},
+        {"$addToSet": {"completed_days": day_number}}
+    )
+    updated = await db.bible_plan_progress.find_one({"plan_id": plan_id, "user_id": user["_id"]})
+    return {"completed_days": updated.get("completed_days", [])}
+
+@api_router.get("/bible-plans/my-progress")
+async def get_my_bible_progress(user: dict = Depends(get_current_user)):
+    """Get user's enrolled Bible plans and progress."""
+    progress_docs = await db.bible_plan_progress.find({"user_id": user["_id"]}).to_list(50)
+    result = []
+    for prog in progress_docs:
+        prog["_id"] = str(prog["_id"])
+        plan = await db.bible_reading_plans.find_one({"_id": ObjectId(prog["plan_id"])})
+        if plan:
+            plan["_id"] = str(plan["_id"])
+            prog["plan"] = plan
+        result.append(prog)
+    return result
+
+# ══════════════════════════════════════════════════════════════════
+# 2. SMALL GROUPS
+# ══════════════════════════════════════════════════════════════════
+
+@api_router.post("/small-groups")
+async def create_small_group(group: SmallGroupCreate, user: dict = Depends(get_current_user)):
+    """Create a small group."""
+    doc = {
+        "name": group.name,
+        "description": group.description,
+        "location": group.location,
+        "meeting_time": group.meeting_time,
+        "church_id": group.church_id or "",
+        "languages": group.languages or [],
+        "max_members": group.max_members or 20,
+        "category": group.category or "",
+        "created_by": user["_id"],
+        "created_at": datetime.now(timezone.utc)
+    }
+    result = await db.small_groups.insert_one(doc)
+    doc["_id"] = str(result.inserted_id)
+    # Creator automatically joins
+    await db.small_group_members.insert_one({
+        "group_id": str(result.inserted_id),
+        "user_id": user["_id"],
+        "role": "leader",
+        "joined_at": datetime.now(timezone.utc)
+    })
+    return doc
+
+@api_router.get("/small-groups")
+async def get_small_groups(search: str = "", state: str = "", language: str = "", category: str = "", skip: int = 0, limit: int = 20):
+    """List/search small groups with filters."""
+    query = {}
+    if search:
+        query["$or"] = [
+            {"name": {"$regex": search, "$options": "i"}},
+            {"description": {"$regex": search, "$options": "i"}},
+            {"location": {"$regex": search, "$options": "i"}},
+        ]
+    if state:
+        query["state"] = state
+    if language:
+        query["languages"] = language
+    if category:
+        query["category"] = category
+    groups = await db.small_groups.find(query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    for g in groups:
+        g["_id"] = str(g["_id"])
+        g["member_count"] = await db.small_group_members.count_documents({"group_id": g["_id"]})
+    return groups
+
+@api_router.get("/small-groups/{group_id}")
+async def get_small_group(group_id: str):
+    """Get small group details with member count."""
+    group = await db.small_groups.find_one({"_id": ObjectId(group_id)})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    group["_id"] = str(group["_id"])
+    group["member_count"] = await db.small_group_members.count_documents({"group_id": group_id})
+    return group
+
+@api_router.post("/small-groups/{group_id}/join")
+async def join_small_group(group_id: str, user: dict = Depends(get_current_user)):
+    """Join a small group."""
+    group = await db.small_groups.find_one({"_id": ObjectId(group_id)})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    member_count = await db.small_group_members.count_documents({"group_id": group_id})
+    if member_count >= group.get("max_members", 20):
+        raise HTTPException(status_code=400, detail="Group is full")
+    existing = await db.small_group_members.find_one({"group_id": group_id, "user_id": user["_id"]})
+    if existing:
+        raise HTTPException(status_code=400, detail="Already a member")
+    await db.small_group_members.insert_one({
+        "group_id": group_id,
+        "user_id": user["_id"],
+        "role": "member",
+        "joined_at": datetime.now(timezone.utc)
+    })
+    return {"message": "Joined group"}
+
+@api_router.delete("/small-groups/{group_id}/join")
+async def leave_small_group(group_id: str, user: dict = Depends(get_current_user)):
+    """Leave a small group."""
+    result = await db.small_group_members.delete_one({"group_id": group_id, "user_id": user["_id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Not a member of this group")
+    return {"message": "Left group"}
+
+@api_router.get("/small-groups/my-groups")
+async def get_my_small_groups(user: dict = Depends(get_current_user)):
+    """Get user's small groups."""
+    memberships = await db.small_group_members.find({"user_id": user["_id"]}).to_list(50)
+    group_ids = [m["group_id"] for m in memberships]
+    groups = await db.small_groups.find({"_id": {"$in": [ObjectId(gid) for gid in group_ids if ObjectId.is_valid(gid)]}}).to_list(50)
+    for g in groups:
+        g["_id"] = str(g["_id"])
+        g["member_count"] = await db.small_group_members.count_documents({"group_id": str(g["_id"])})
+    return groups
+
+# ══════════════════════════════════════════════════════════════════
+# 3. DAILY VERSE
+# ══════════════════════════════════════════════════════════════════
+
+DAILY_VERSES = [
+    {"book": "Genesis", "chapter": 1, "verse": 1, "text": "In the beginning God created the heavens and the earth."},
+    {"book": "Genesis", "chapter": 1, "verse": 3, "text": "And God said, Let there be light, and there was light."},
+    {"book": "Psalm", "chapter": 23, "verse": 1, "text": "The Lord is my shepherd; I shall not want."},
+    {"book": "Psalm", "chapter": 23, "verse": 4, "text": "Yea, though I walk through the valley of the shadow of death, I will fear no evil: for thou art with me."},
+    {"book": "Psalm", "chapter": 46, "verse": 10, "text": "Be still, and know that I am God."},
+    {"book": "Psalm", "chapter": 119, "verse": 105, "text": "Thy word is a lamp unto my feet, and a light unto my path."},
+    {"book": "Proverbs", "chapter": 3, "verse": 5, "text": "Trust in the Lord with all thine heart; and lean not unto thine own understanding."},
+    {"book": "Proverbs", "chapter": 3, "verse": 6, "text": "In all thy ways acknowledge him, and he shall direct thy paths."},
+    {"book": "Proverbs", "chapter": 16, "verse": 3, "text": "Commit thy works unto the Lord, and thy thoughts shall be established."},
+    {"book": "Isaiah", "chapter": 40, "verse": 31, "text": "But they that wait upon the Lord shall renew their strength; they shall mount up with wings as eagles."},
+    {"book": "Isaiah", "chapter": 41, "verse": 10, "text": "Fear thou not; for I am with thee: be not dismayed; for I am thy God."},
+    {"book": "Jeremiah", "chapter": 29, "verse": 11, "text": "For I know the thoughts that I think toward you, saith the Lord, thoughts of peace, and not of evil."},
+    {"book": "Matthew", "chapter": 5, "verse": 8, "text": "Blessed are the pure in heart: for they shall see God."},
+    {"book": "Matthew", "chapter": 6, "verse": 33, "text": "But seek ye first the kingdom of God, and his righteousness; and all these things shall be added unto you."},
+    {"book": "Matthew", "chapter": 11, "verse": 28, "text": "Come unto me, all ye that labour and are heavy laden, and I will give you rest."},
+    {"book": "Matthew", "chapter": 28, "verse": 19, "text": "Go ye therefore, and teach all nations, baptizing them in the name of the Father, and of the Son, and of the Holy Ghost."},
+    {"book": "Mark", "chapter": 11, "verse": 24, "text": "Therefore I say unto you, What things soever ye desire, when ye pray, believe that ye receive them, and ye shall have them."},
+    {"book": "Luke", "chapter": 6, "verse": 31, "text": "And as ye would that men should do to you, do ye also to them likewise."},
+    {"book": "John", "chapter": 3, "verse": 16, "text": "For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life."},
+    {"book": "John", "chapter": 8, "verse": 32, "text": "And ye shall know the truth, and the truth shall make you free."},
+    {"book": "John", "chapter": 10, "verse": 10, "text": "I am come that they might have life, and that they might have it more abundantly."},
+    {"book": "John", "chapter": 14, "verse": 6, "text": "Jesus saith unto him, I am the way, the truth, and the life: no man cometh unto the Father, but by me."},
+    {"book": "John", "chapter": 14, "verse": 27, "text": "Peace I leave with you, my peace I give unto you: not as the world giveth, give I unto you."},
+    {"book": "John", "chapter": 15, "verse": 12, "text": "This is my commandment, That ye love one another, as I have loved you."},
+    {"book": "Romans", "chapter": 8, "verse": 28, "text": "And we know that all things work together for good to them that love God."},
+    {"book": "Romans", "chapter": 8, "verse": 38, "text": "For I am persuaded, that neither death, nor life, nor angels, nor principalities, nor powers, shall be able to separate us from the love of God."},
+    {"book": "Romans", "chapter": 12, "verse": 2, "text": "And be not conformed to this world: but be ye transformed by the renewing of your mind."},
+    {"book": "Romans", "chapter": 12, "verse": 12, "text": "Rejoicing in hope; patient in tribulation; continuing instant in prayer."},
+    {"book": "1 Corinthians", "chapter": 13, "verse": 13, "text": "And now abideth faith, hope, charity, these three; but the greatest of these is charity."},
+    {"book": "2 Corinthians", "chapter": 5, "verse": 7, "text": "For we walk by faith, not by sight."},
+    {"book": "Galatians", "chapter": 5, "verse": 22, "text": "But the fruit of the Spirit is love, joy, peace, longsuffering, gentleness, goodness, faith."},
+    {"book": "Ephesians", "chapter": 2, "verse": 8, "text": "For by grace are ye saved through faith; and that not of yourselves: it is the gift of God."},
+    {"book": "Ephesians", "chapter": 6, "verse": 11, "text": "Put on the whole armour of God, that ye may be able to stand against the wiles of the devil."},
+    {"book": "Philippians", "chapter": 4, "verse": 6, "text": "Be careful for nothing; but in every thing by prayer and supplication with thanksgiving let your requests be made known unto God."},
+    {"book": "Philippians", "chapter": 4, "verse": 8, "text": "Finally, brethren, whatsoever things are true, whatsoever things are honest, whatsoever things are just, whatsoever things are pure, think on these things."},
+    {"book": "Philippians", "chapter": 4, "verse": 13, "text": "I can do all things through Christ which strengtheneth me."},
+    {"book": "Colossians", "chapter": 3, "verse": 23, "text": "And whatsoever ye do, do it heartily, as to the Lord, and not unto men."},
+    {"book": "1 Thessalonians", "chapter": 5, "verse": 16, "text": "Rejoice evermore. Pray without ceasing. In every thing give thanks."},
+    {"book": "2 Timothy", "chapter": 1, "verse": 7, "text": "For God hath not given us the spirit of fear; but of power, and of love, and of a sound mind."},
+    {"book": "Hebrews", "chapter": 11, "verse": 1, "text": "Now faith is the substance of things hoped for, the evidence of things not seen."},
+    {"book": "Hebrews", "chapter": 13, "verse": 8, "text": "Jesus Christ the same yesterday, and to day, and for ever."},
+    {"book": "James", "chapter": 1, "verse": 5, "text": "If any of you lack wisdom, let him ask of God, that giveth to all men liberally, and upbraideth not."},
+    {"book": "James", "chapter": 5, "verse": 16, "text": "The effectual fervent prayer of a righteous man availeth much."},
+    {"book": "1 Peter", "chapter": 5, "verse": 7, "text": "Casting all your care upon him; for he careth for you."},
+    {"book": "1 John", "chapter": 4, "verse": 8, "text": "He that loveth not knoweth not God; for God is love."},
+    {"book": "Revelation", "chapter": 3, "verse": 20, "text": "Behold, I stand at the door, and knock: if any man hear my voice, and open the door, I will come in to him."},
+    {"book": "Psalm", "chapter": 27, "verse": 1, "text": "The Lord is my light and my salvation; whom shall I fear? the Lord is the strength of my life; of whom shall I be afraid?"},
+    {"book": "Psalm", "chapter": 37, "verse": 4, "text": "Delight thyself also in the Lord: and he shall give thee the desires of thine heart."},
+    {"book": "Psalm", "chapter": 91, "verse": 1, "text": "He that dwelleth in the secret place of the most High shall abide under the shadow of the Almighty."},
+    {"book": "Psalm", "chapter": 139, "verse": 14, "text": "I will praise thee; for I am fearfully and wonderfully made."},
+    {"book": "Proverbs", "chapter": 18, "verse": 10, "text": "The name of the Lord is a strong tower: the righteous runneth into it, and is safe."},
+    {"book": "Proverbs", "chapter": 22, "verse": 6, "text": "Train up a child in the way he should go: and when he is old, he will not depart from it."},
+    {"book": "Isaiah", "chapter": 43, "verse": 2, "text": "When thou passest through the waters, I will be with thee; and through the rivers, they shall not overflow thee."},
+    {"book": "Matthew", "chapter": 5, "verse": 14, "text": "Ye are the light of the world. A city that is set on an hill cannot be hid."},
+    {"book": "Matthew", "chapter": 7, "verse": 7, "text": "Ask, and it shall be given you; seek, and ye shall find; knock, and it shall be opened unto you."},
+    {"book": "Matthew", "chapter": 17, "verse": 20, "text": "If ye have faith as a grain of mustard seed, ye shall say unto this mountain, Remove hence; and it shall remove."},
+    {"book": "Matthew", "chapter": 22, "verse": 37, "text": "Thou shalt love the Lord thy God with all thy heart, and with all thy soul, and with all thy mind."},
+    {"book": "Luke", "chapter": 1, "verse": 37, "text": "For with God nothing shall be impossible."},
+    {"book": "John", "chapter": 1, "verse": 5, "text": "And the light shineth in darkness; and the darkness comprehended it not."},
+    {"book": "John", "chapter": 4, "verse": 24, "text": "God is a Spirit: and they that worship him must worship him in spirit and in truth."},
+    {"book": "John", "chapter": 13, "verse": 34, "text": "A new commandment I give unto you, That ye love one another; as I have loved you."},
+    {"book": "John", "chapter": 16, "verse": 33, "text": "In the world ye shall have tribulation: but be of good cheer; I have overcome the world."},
+    {"book": "Acts", "chapter": 1, "verse": 8, "text": "But ye shall receive power, after that the Holy Ghost is come upon you."},
+    {"book": "Romans", "chapter": 5, "verse": 8, "text": "But God commendeth his love toward us, in that, while we were yet sinners, Christ died for us."},
+    {"book": "Romans", "chapter": 15, "verse": 13, "text": "Now the God of hope fill you with all joy and peace in believing."},
+    {"book": "1 Corinthians", "chapter": 10, "verse": 13, "text": "There hath no temptation taken you but such as is common to man: but God is faithful."},
+    {"book": "2 Corinthians", "chapter": 12, "verse": 9, "text": "My grace is sufficient for thee: for my strength is made perfect in weakness."},
+    {"book": "Ephesians", "chapter": 3, "verse": 20, "text": "Now unto him that is able to do exceeding abundantly above all that we ask or think."},
+    {"book": "Philippians", "chapter": 1, "verse": 6, "text": "Being confident of this very thing, that he which hath begun a good work in you will perform it."},
+    {"book": "Colossians", "chapter": 3, "verse": 2, "text": "Set your affection on things above, not on things on the earth."},
+    {"book": "2 Timothy", "chapter": 3, "verse": 16, "text": "All scripture is given by inspiration of God, and is profitable for doctrine, for reproof, for correction."},
+    {"book": "Hebrews", "chapter": 4, "verse": 16, "text": "Let us therefore come boldly unto the throne of grace, that we may obtain mercy."},
+    {"book": "Hebrews", "chapter": 12, "verse": 1, "text": "Let us run with patience the race that is set before us."},
+    {"book": "Hebrews", "chapter": 12, "verse": 2, "text": "Looking unto Jesus the author and finisher of our faith."},
+    {"book": "James", "chapter": 1, "verse": 2, "text": "My brethren, count it all joy when ye fall into divers temptations."},
+    {"book": "1 Peter", "chapter": 1, "verse": 7, "text": "That the trial of your faith, being much more precious than of gold, might be found unto praise."},
+    {"book": "1 John", "chapter": 1, "verse": 9, "text": "If we confess our sins, he is faithful and just to forgive us our sins."},
+    {"book": "1 John", "chapter": 5, "verse": 4, "text": "For whatsoever is born of God overcometh the world: and this is the victory that overcometh the world, even our faith."},
+    {"book": "Psalm", "chapter": 1, "verse": 1, "text": "Blessed is the man that walketh not in the counsel of the ungodly."},
+    {"book": "Psalm", "chapter": 19, "verse": 1, "text": "The heavens declare the glory of God; and the firmament sheweth his handywork."},
+    {"book": "Psalm", "chapter": 34, "verse": 8, "text": "O taste and see that the Lord is good: blessed is the man that trusteth in him."},
+    {"book": "Psalm", "chapter": 55, "verse": 22, "text": "Cast thy burden upon the Lord, and he shall sustain thee."},
+    {"book": "Psalm", "chapter": 103, "verse": 1, "text": "Bless the Lord, O my soul: and all that is within me, bless his holy name."},
+    {"book": "Proverbs", "chapter": 4, "verse": 7, "text": "Wisdom is the principal thing; therefore get wisdom: and with all thy getting get understanding."},
+    {"book": "Isaiah", "chapter": 26, "verse": 3, "text": "Thou wilt keep him in perfect peace, whose mind is stayed on thee."},
+    {"book": "Lamentations", "chapter": 3, "verse": 22, "text": "It is of the Lord's mercies that we are not consumed, because his compassions fail not."},
+    {"book": "Micah", "chapter": 6, "verse": 8, "text": "He hath shewed thee, O man, what is good; and what doth the Lord require of thee, but to do justly, and to love mercy, and to walk humbly with thy God?"},
+    {"book": "Habakkuk", "chapter": 2, "verse": 4, "text": "The just shall live by his faith."},
+    {"book": "Zephaniah", "chapter": 3, "verse": 17, "text": "The Lord thy God in the midst of thee is mighty; he will save, he will rejoice over thee with joy."},
+    {"book": "Malachi", "chapter": 3, "verse": 10, "text": "Bring ye all the tithes into the storehouse, that there may be meat in mine house, and prove me now herewith."},
+    {"book": "Matthew", "chapter": 5, "verse": 16, "text": "Let your light so shine before men, that they may see your good works, and glorify your Father which is in heaven."},
+    {"book": "Mark", "chapter": 9, "verse": 23, "text": "Jesus said unto him, If thou canst believe, all things are possible to him that believeth."},
+    {"book": "Luke", "chapter": 12, "verse": 32, "text": "Fear not, little flock; for it is your Father's good pleasure to give you the kingdom."},
+    {"book": "John", "chapter": 11, "verse": 25, "text": "I am the resurrection, and the life: he that believeth in me, though he were dead, yet shall he live."},
+    {"book": "Acts", "chapter": 2, "verse": 38, "text": "Repent, and be baptized every one of you in the name of Jesus Christ for the remission of sins."},
+    {"book": "Romans", "chapter": 6, "verse": 23, "text": "For the wages of sin is death; but the gift of God is eternal life through Jesus Christ our Lord."},
+    {"book": "1 Corinthians", "chapter": 2, "verse": 9, "text": "Eye hath not seen, nor ear heard, neither have entered into the heart of man, the things which God hath prepared."},
+    {"book": "Galatians", "chapter": 2, "verse": 20, "text": "I am crucified with Christ: nevertheless I live; yet not I, but Christ liveth in me."},
+    {"book": "Ephesians", "chapter": 4, "verse": 32, "text": "And be ye kind one to another, tenderhearted, forgiving one another, even as God for Christ's sake hath forgiven you."},
+    {"book": "Philippians", "chapter": 2, "verse": 3, "text": "Let nothing be done through strife or vainglory; but in lowliness of mind let each esteem other better than themselves."},
+    {"book": "1 John", "chapter": 3, "verse": 1, "text": "Behold, what manner of love the Father hath bestowed upon us, that we should be called the sons of God."},
+    {"book": "Revelation", "chapter": 21, "verse": 4, "text": "And God shall wipe away all tears from their eyes; and there shall be no more death, neither sorrow, nor crying."},
+    {"book": "Deuteronomy", "chapter": 31, "verse": 6, "text": "Be strong and of a good courage, fear not, nor be afraid of them: for the Lord thy God, he it is that doth go with thee."},
+    {"book": "Joshua", "chapter": 1, "verse": 9, "text": "Have not I commanded thee? Be strong and of a good courage; be not afraid, neither be thou dismayed: for the Lord thy God is with thee whithersoever thou goest."},
+]
+
+@api_router.get("/daily-verse")
+async def get_daily_verse():
+    """Return the verse of the day based on day-of-year."""
+    day_of_year = datetime.now(timezone.utc).timetuple().tm_yday
+    index = (day_of_year - 1) % len(DAILY_VERSES)
+    verse = DAILY_VERSES[index]
+    verse["reference"] = f"{verse['book']} {verse['chapter']}:{verse['verse']}"
+    return verse
+
+# ══════════════════════════════════════════════════════════════════
+# 4. ACHIEVEMENTS / BADGES
+# ══════════════════════════════════════════════════════════════════
+
+ACHIEVEMENT_DEFS = [
+    {"key": "first_prayer", "name": "First Prayer", "description": "Pray for someone for the first time", "icon": "🙏", "category": "prayer"},
+    {"key": "event_host", "name": "Event Host", "description": "Create your first event", "icon": "🎉", "category": "events"},
+    {"key": "community_builder", "name": "Community Builder", "description": "Get 10 followers", "icon": "🏗️", "category": "social"},
+    {"key": "prayer_warrior", "name": "Prayer Warrior", "description": "Pray for 10 different people", "icon": "⚔️", "category": "prayer"},
+    {"key": "content_creator", "name": "Content Creator", "description": "Write 5 posts", "icon": "✍️", "category": "content"},
+    {"key": "social_butterfly", "name": "Social Butterfly", "description": "Attend 5 events", "icon": "🦋", "category": "events"},
+    {"key": "faith_scholar", "name": "Faith Scholar", "description": "Complete a Bible reading plan", "icon": "📖", "category": "bible"},
+]
+
+async def seed_achievements():
+    """Seed achievement definitions if not already present."""
+    for ach in ACHIEVEMENT_DEFS:
+        existing = await db.achievements.find_one({"key": ach["key"]})
+        if not existing:
+            await db.achievements.insert_one({**ach, "created_at": datetime.now(timezone.utc)})
+
+@api_router.get("/achievements")
+async def get_achievements():
+    """List all available achievements."""
+    await seed_achievements()
+    achievements = await db.achievements.find({}).to_list(100)
+    for a in achievements:
+        a["_id"] = str(a["_id"])
+    return achievements
+
+@api_router.get("/users/{user_id}/achievements")
+async def get_user_achievements(user_id: str):
+    """Get user's earned achievements."""
+    earned = await db.user_achievements.find({"user_id": user_id}).to_list(100)
+    for e in earned:
+        e["_id"] = str(e["_id"])
+    return earned
+
+@api_router.post("/achievements/check")
+async def check_achievements(user: dict = Depends(get_current_user)):
+    """Check and award new achievements for the current user."""
+    await seed_achievements()
+    user_id = user["_id"]
+    new_achievements = []
+
+    # Get current earned keys
+    earned_docs = await db.user_achievements.find({"user_id": user_id}).to_list(100)
+    earned_keys = set(e["achievement_key"] for e in earned_docs)
+
+    # Check: Content Creator — Write 5 posts
+    if "content_creator" not in earned_keys:
+        posts_count = await db.posts.count_documents({"user_id": user_id})
+        if posts_count >= 5:
+            await db.user_achievements.insert_one({"user_id": user_id, "achievement_key": "content_creator", "earned_at": datetime.now(timezone.utc)})
+            new_achievements.append("content_creator")
+
+    # Check: Event Host — Create your first event
+    if "event_host" not in earned_keys:
+        events_count = await db.events.count_documents({"created_by": user_id})
+        if events_count >= 1:
+            await db.user_achievements.insert_one({"user_id": user_id, "achievement_key": "event_host", "earned_at": datetime.now(timezone.utc)})
+            new_achievements.append("event_host")
+
+    # Check: Community Builder — Get 10 followers
+    if "community_builder" not in earned_keys:
+        user_doc = await db.users.find_one({"_id": ObjectId(user_id)}, {"followers": 1})
+        if user_doc and len(user_doc.get("followers", [])) >= 10:
+            await db.user_achievements.insert_one({"user_id": user_id, "achievement_key": "community_builder", "earned_at": datetime.now(timezone.utc)})
+            new_achievements.append("community_builder")
+
+    # Check: Prayer Warrior — Pray for 10 different people
+    if "prayer_warrior" not in earned_keys:
+        prayers = await db.prayers.find({"user_id": user_id}, {"prayed_for_user_id": 1}).to_list(1000)
+        unique_targets = set(p.get("prayed_for_user_id") for p in prayers if p.get("prayed_for_user_id"))
+        if len(unique_targets) >= 10:
+            await db.user_achievements.insert_one({"user_id": user_id, "achievement_key": "prayer_warrior", "earned_at": datetime.now(timezone.utc)})
+            new_achievements.append("prayer_warrior")
+
+    # Check: First Prayer
+    if "first_prayer" not in earned_keys:
+        prayers_count = await db.prayers.count_documents({"user_id": user_id})
+        if prayers_count >= 1:
+            await db.user_achievements.insert_one({"user_id": user_id, "achievement_key": "first_prayer", "earned_at": datetime.now(timezone.utc)})
+            new_achievements.append("first_prayer")
+
+    # Check: Social Butterfly — Attend 5 events
+    if "social_butterfly" not in earned_keys:
+        regs_count = await db.event_registrations.count_documents({"user_id": user_id})
+        if regs_count >= 5:
+            await db.user_achievements.insert_one({"user_id": user_id, "achievement_key": "social_butterfly", "earned_at": datetime.now(timezone.utc)})
+            new_achievements.append("social_butterfly")
+
+    # Check: Faith Scholar — Complete a Bible reading plan
+    if "faith_scholar" not in earned_keys:
+        progress_docs = await db.bible_plan_progress.find({"user_id": user_id}).to_list(50)
+        for prog in progress_docs:
+            plan = await db.bible_reading_plans.find_one({"_id": ObjectId(prog["plan_id"])})
+            if plan and len(prog.get("completed_days", [])) >= plan.get("duration_days", 0):
+                await db.user_achievements.insert_one({"user_id": user_id, "achievement_key": "faith_scholar", "earned_at": datetime.now(timezone.utc)})
+                new_achievements.append("faith_scholar")
+                break
+
+    return {"new_achievements": new_achievements, "total_earned": len(earned_keys) + len(new_achievements)}
+
+# ══════════════════════════════════════════════════════════════════
+# 5. STREAKS
+# ══════════════════════════════════════════════════════════════════
+
+@api_router.get("/streaks/my")
+async def get_my_streaks(user: dict = Depends(get_current_user)):
+    """Get user's streaks (prayer, bible reading, etc.)."""
+    streaks = await db.streaks.find({"user_id": user["_id"]}).to_list(20)
+    for s in streaks:
+        s["_id"] = str(s["_id"])
+    return streaks
+
+@api_router.post("/streaks/update")
+async def update_streak(body: StreakUpdate, user: dict = Depends(get_current_user)):
+    """Update a streak: increments count, resets if >1 day gap."""
+    streak_type = body.streak_type
+    if streak_type not in ("prayer", "bible_reading", "attendance"):
+        raise HTTPException(status_code=400, detail="Invalid streak_type. Must be prayer, bible_reading, or attendance")
+    user_id = user["_id"]
+    now = datetime.now(timezone.utc)
+    existing = await db.streaks.find_one({"user_id": user_id, "streak_type": streak_type})
+    if not existing:
+        doc = {
+            "user_id": user_id,
+            "streak_type": streak_type,
+            "count": 1,
+            "last_date": now,
+            "created_at": now
+        }
+        result = await db.streaks.insert_one(doc)
+        doc["_id"] = str(result.inserted_id)
+        return doc
+    last_date = existing.get("last_date", now)
+    if isinstance(last_date, str):
+        last_date = datetime.fromisoformat(last_date)
+    if last_date.tzinfo is None:
+        last_date = last_date.replace(tzinfo=timezone.utc)
+    diff = (now.date() - last_date.date()).days
+    if diff == 0:
+        # Same day — just update last_date
+        await db.streaks.update_one({"_id": existing["_id"]}, {"$set": {"last_date": now}})
+    elif diff == 1:
+        # Consecutive day — increment
+        await db.streaks.update_one({"_id": existing["_id"]}, {"$inc": {"count": 1}, "$set": {"last_date": now}})
+    else:
+        # Gap — reset streak
+        await db.streaks.update_one({"_id": existing["_id"]}, {"$set": {"count": 1, "last_date": now}})
+    updated = await db.streaks.find_one({"_id": existing["_id"]})
+    updated["_id"] = str(updated["_id"])
+    return updated
+
+# ══════════════════════════════════════════════════════════════════
+# 6. PRODUCT CATEGORIES & WISHLIST
+# ══════════════════════════════════════════════════════════════════
+
+PRODUCT_CATEGORIES = ["Books", "Music", "Art", "Handmade", "Services", "Clothing", "Devotionals", "Courses"]
+
+@api_router.get("/products/categories")
+async def get_product_categories():
+    """Return list of product categories."""
+    return {"categories": PRODUCT_CATEGORIES}
+
+@api_router.post("/products/{product_id}/wishlist")
+async def add_to_wishlist(product_id: str, user: dict = Depends(get_current_user)):
+    """Add a product to user's wishlist."""
+    product = await db.products.find_one({"_id": ObjectId(product_id)})
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    existing = await db.wishlists.find_one({"user_id": user["_id"], "product_id": product_id})
+    if existing:
+        raise HTTPException(status_code=400, detail="Already in wishlist")
+    await db.wishlists.insert_one({
+        "user_id": user["_id"],
+        "product_id": product_id,
+        "added_at": datetime.now(timezone.utc)
+    })
+    return {"message": "Added to wishlist"}
+
+@api_router.delete("/products/{product_id}/wishlist")
+async def remove_from_wishlist(product_id: str, user: dict = Depends(get_current_user)):
+    """Remove a product from user's wishlist."""
+    result = await db.wishlists.delete_one({"user_id": user["_id"], "product_id": product_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Not in wishlist")
+    return {"message": "Removed from wishlist"}
+
+@api_router.get("/users/{user_id}/wishlist")
+async def get_user_wishlist(user_id: str, skip: int = 0, limit: int = 20):
+    """Get user's wishlist with product details."""
+    wishlist_items = await db.wishlists.find({"user_id": user_id}).sort("added_at", -1).skip(skip).limit(limit).to_list(limit)
+    result = []
+    for item in wishlist_items:
+        item["_id"] = str(item["_id"])
+        product = await db.products.find_one({"_id": ObjectId(item["product_id"])})
+        if product:
+            product["_id"] = str(product["_id"])
+            item["product"] = product
+        else:
+            item["product"] = None
+        result.append(item)
+    return result
+
+# ══════════════════════════════════════════════════════════════════
+# 7. SELLER RATINGS / PRODUCT REVIEWS
+# ══════════════════════════════════════════════════════════════════
+
+@api_router.post("/products/{product_id}/reviews")
+async def create_product_review(product_id: str, review: ProductReviewCreate, user: dict = Depends(get_current_user)):
+    """Create a review for a product."""
+    product = await db.products.find_one({"_id": ObjectId(product_id)})
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    doc = {
+        "product_id": product_id,
+        "user_id": user["_id"],
+        "user_name": user.get("name", ""),
+        "user_image": user.get("profile_image", ""),
+        "rating": review.rating,
+        "comment": review.comment or "",
+        "created_at": datetime.now(timezone.utc)
+    }
+    result = await db.product_reviews.insert_one(doc)
+    doc["_id"] = str(result.inserted_id)
+    return doc
+
+@api_router.get("/products/{product_id}/reviews")
+async def get_product_reviews(product_id: str, skip: int = 0, limit: int = 20):
+    """List reviews for a product."""
+    reviews = await db.product_reviews.find({"product_id": product_id}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    for r in reviews:
+        r["_id"] = str(r["_id"])
+    # Calculate average rating
+    pipeline = [
+        {"$match": {"product_id": product_id}},
+        {"$group": {"_id": None, "avg_rating": {"$avg": "$rating"}, "count": {"$sum": 1}}}
+    ]
+    agg = await db.product_reviews.aggregate(pipeline).to_list(1)
+    avg_rating = round(agg[0]["avg_rating"], 1) if agg else 0.0
+    total_reviews = agg[0]["count"] if agg else 0
+    return {"reviews": reviews, "avg_rating": avg_rating, "total_reviews": total_reviews}
+
+# ══════════════════════════════════════════════════════════════════
+# 8. ANNOUNCEMENT BANNERS
+# ══════════════════════════════════════════════════════════════════
+
+@api_router.get("/announcements")
+async def get_announcements():
+    """Get active announcements (public)."""
+    now = datetime.now(timezone.utc)
+    announcements = await db.announcements.find({
+        "is_active": True,
+        "$or": [
+            {"active_until": {"$exists": False}},
+            {"active_until": None},
+            {"active_until": {"$gte": now.isoformat()}}
+        ]
+    }).sort("created_at", -1).to_list(20)
+    for a in announcements:
+        a["_id"] = str(a["_id"])
+    return announcements
+
+@api_router.post("/admin/announcements")
+async def create_announcement(announcement: AnnouncementCreate, admin: dict = Depends(require_admin)):
+    """Create an announcement (admin)."""
+    doc = {
+        "title": announcement.title,
+        "message": announcement.message,
+        "type": announcement.type,
+        "active_until": announcement.active_until or None,
+        "is_active": announcement.is_active if announcement.is_active is not None else True,
+        "created_by": admin["_id"],
+        "created_at": datetime.now(timezone.utc)
+    }
+    result = await db.announcements.insert_one(doc)
+    doc["_id"] = str(result.inserted_id)
+    await log_admin_action(admin["_id"], admin.get("name", "Admin"), "CREATE_ANNOUNCEMENT", "announcement", str(result.inserted_id), f"Created announcement: {announcement.title}")
+    return doc
+
+@api_router.get("/admin/announcements")
+async def admin_get_announcements(admin: dict = Depends(require_admin)):
+    """List all announcements (admin)."""
+    announcements = await db.announcements.find({}).sort("created_at", -1).to_list(100)
+    for a in announcements:
+        a["_id"] = str(a["_id"])
+    return announcements
+
+@api_router.put("/admin/announcements/{announcement_id}/toggle")
+async def toggle_announcement(announcement_id: str, admin: dict = Depends(require_admin)):
+    """Toggle announcement active/inactive (admin)."""
+    announcement = await db.announcements.find_one({"_id": ObjectId(announcement_id)})
+    if not announcement:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    new_status = not announcement.get("is_active", True)
+    await db.announcements.update_one({"_id": ObjectId(announcement_id)}, {"$set": {"is_active": new_status}})
+    await log_admin_action(admin["_id"], admin.get("name", "Admin"), "TOGGLE_ANNOUNCEMENT", "announcement", announcement_id, f"Set announcement to {'active' if new_status else 'inactive'}")
+    return {"is_active": new_status}
+
+@api_router.delete("/admin/announcements/{announcement_id}")
+async def delete_announcement(announcement_id: str, admin: dict = Depends(require_admin)):
+    """Delete an announcement (admin)."""
+    result = await db.announcements.delete_one({"_id": ObjectId(announcement_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    await log_admin_action(admin["_id"], admin.get("name", "Admin"), "DELETE_ANNOUNCEMENT", "announcement", announcement_id, "Deleted announcement")
+    return {"message": "Announcement deleted"}
+
+# ══════════════════════════════════════════════════════════════════
+# 9. BFF/MATCHING SYSTEM
+# ══════════════════════════════════════════════════════════════════
+
+@api_router.get("/bff/discover")
+async def bff_discover(user: dict = Depends(get_current_user), mode: str = "bff", limit: int = 10):
+    """Get candidate profiles to swipe on (exclude already swiped)."""
+    # Get IDs the user already swiped on
+    swiped = await db.swipes.find({"user_id": user["_id"], "mode": mode}, {"target_id": 1}).to_list(1000)
+    swiped_ids = [s["target_id"] for s in swiped]
+    # Exclude self and already swiped
+    exclude_ids = [ObjectId(uid) for uid in swiped_ids if ObjectId.is_valid(uid)] + [ObjectId(user["_id"])]
+    query = {"_id": {"$nin": exclude_ids}, "status": "active"}
+    if mode == "matrimony":
+        query["role"] = {"$ne": "church"}
+    candidates = await db.users.find(
+        query,
+        {"_id": 1, "name": 1, "username": 1, "profile_image": 1, "bio": 1, "faith_belief": 1, "languages": 1, "state": 1, "city": 1, "role": 1}
+    ).limit(limit).to_list(limit)
+    for c in candidates:
+        c["_id"] = str(c["_id"])
+    return candidates
+
+@api_router.get("/bff/compatible")
+async def bff_compatible(user: dict = Depends(get_current_user), mode: str = "bff", limit: int = 10):
+    """Get compatible profiles based on shared faith, languages, location."""
+    user_data = await db.users.find_one({"_id": ObjectId(user["_id"])}, {"faith_belief": 1, "languages": 1, "state": 1, "city": 1})
+    query = {"_id": {"$ne": ObjectId(user["_id"])}, "status": "active"}
+    # Score candidates
+    candidates = await db.users.find(
+        query,
+        {"_id": 1, "name": 1, "username": 1, "profile_image": 1, "bio": 1, "faith_belief": 1, "languages": 1, "state": 1, "city": 1, "role": 1}
+    ).limit(100).to_list(100)
+    scored = []
+    my_faith = user_data.get("faith_belief", "") if user_data else ""
+    my_languages = set(user_data.get("languages", [])) if user_data else set()
+    my_state = user_data.get("state", "") if user_data else ""
+    my_city = user_data.get("city", "") if user_data else ""
+    for c in candidates:
+        c["_id"] = str(c["_id"])
+        score = 0
+        if my_faith and c.get("faith_belief") == my_faith:
+            score += 40
+        shared_langs = my_languages.intersection(set(c.get("languages", [])))
+        score += len(shared_langs) * 10
+        if my_state and c.get("state") == my_state:
+            score += 15
+        if my_city and c.get("city") == my_city:
+            score += 20
+        c["compatibility_score"] = score
+        scored.append(c)
+    scored.sort(key=lambda x: x["compatibility_score"], reverse=True)
+    return scored[:limit]
+
+@api_router.get("/bff/connections")
+async def bff_connections(user: dict = Depends(get_current_user)):
+    """Get matches + who liked me."""
+    user_id = user["_id"]
+    # Mutual matches: both liked each other
+    my_likes = await db.swipes.find({"user_id": user_id, "action": "like"}, {"target_id": 1, "mode": 1}).to_list(100)
+    my_like_ids = [s["target_id"] for s in my_likes]
+    # Who liked me
+    liked_me = await db.swipes.find({"target_id": user_id, "action": "like"}, {"user_id": 1, "mode": 1}).to_list(100)
+    liked_me_ids = [s["user_id"] for s in liked_me]
+    # Mutual matches
+    mutual_ids = set(my_like_ids).intersection(set(liked_me_ids))
+    # Get match profiles
+    match_profiles = []
+    if mutual_ids:
+        users = await db.users.find(
+            {"_id": {"$in": [ObjectId(uid) for uid in mutual_ids if ObjectId.is_valid(uid)]}},
+            {"_id": 1, "name": 1, "username": 1, "profile_image": 1, "bio": 1}
+        ).to_list(100)
+        for u in users:
+            u["_id"] = str(u["_id"])
+            u["match_type"] = "mutual"
+            match_profiles.append(u)
+    # Who liked me (not yet matched)
+    pending_ids = set(liked_me_ids) - mutual_ids
+    pending_profiles = []
+    if pending_ids:
+        users = await db.users.find(
+            {"_id": {"$in": [ObjectId(uid) for uid in pending_ids if ObjectId.is_valid(uid)]}},
+            {"_id": 1, "name": 1, "username": 1, "profile_image": 1, "bio": 1}
+        ).to_list(100)
+        for u in users:
+            u["_id"] = str(u["_id"])
+            u["match_type"] = "pending"
+            pending_profiles.append(u)
+    return {"matches": match_profiles, "liked_me": pending_profiles}
+
+@api_router.post("/bff/swipe")
+async def bff_swipe(body: BffSwipeCreate, user: dict = Depends(get_current_user)):
+    """Record a swipe (like/pass)."""
+    if body.action not in ("like", "pass"):
+        raise HTTPException(status_code=400, detail="Action must be 'like' or 'pass'")
+    if body.mode not in ("bff", "matrimony"):
+        raise HTTPException(status_code=400, detail="Mode must be 'bff' or 'matrimony'")
+    target = await db.users.find_one({"_id": ObjectId(body.target_id)})
+    if not target:
+        raise HTTPException(status_code=404, detail="Target user not found")
+    # Upsert: update if already swiped on this target
+    await db.swipes.update_one(
+        {"user_id": user["_id"], "target_id": body.target_id, "mode": body.mode},
+        {"$set": {"action": body.action, "created_at": datetime.now(timezone.utc)}},
+        upsert=True
+    )
+    # Check for mutual like → create match
+    is_match = False
+    if body.action == "like":
+        reverse = await db.swipes.find_one({"user_id": body.target_id, "target_id": user["_id"], "action": "like", "mode": body.mode})
+        if reverse:
+            is_match = True
+            await db.matches.update_one(
+                {"users": {"$all": [user["_id"], body.target_id]}, "mode": body.mode},
+                {"$set": {"created_at": datetime.now(timezone.utc)}},
+                upsert=True
+            )
+    return {"action": body.action, "is_match": is_match}
+
+@api_router.get("/bff/ai-match")
+async def bff_ai_match(user: dict = Depends(get_current_user), target_id: str = ""):
+    """AI compatibility analysis (mock/LLM-generated compatibility score)."""
+    if not target_id:
+        raise HTTPException(status_code=400, detail="target_id query param required")
+    target = await db.users.find_one({"_id": ObjectId(target_id)}, {"name": 1, "bio": 1, "faith_belief": 1, "languages": 1, "state": 1, "city": 1, "role": 1, "interests": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Target user not found")
+    me = await db.users.find_one({"_id": ObjectId(user["_id"])}, {"name": 1, "bio": 1, "faith_belief": 1, "languages": 1, "state": 1, "city": 1, "role": 1, "interests": 1})
+    # Calculate compatibility score
+    score = 50  # base
+    reasons = []
+    if me.get("faith_belief") and target.get("faith_belief"):
+        if me["faith_belief"] == target["faith_belief"]:
+            score += 25
+            reasons.append("Same faith belief")
+        else:
+            score += 5
+            reasons.append("Different but compatible faith")
+    shared_langs = set(me.get("languages", [])).intersection(set(target.get("languages", [])))
+    if shared_langs:
+        score += min(len(shared_langs) * 5, 15)
+        reasons.append(f"Shared languages: {', '.join(shared_langs)}")
+    if me.get("state") and me["state"] == target.get("state"):
+        score += 10
+        reasons.append("Same state/region")
+    if me.get("city") and me["city"] == target.get("city"):
+        score += 10
+        reasons.append("Same city")
+    score = min(score, 99)
+    return {
+        "target_id": target_id,
+        "target_name": target.get("name", ""),
+        "compatibility_score": score,
+        "reasons": reasons,
+        "recommendation": "Highly compatible" if score >= 80 else "Good match" if score >= 65 else "Worth exploring" if score >= 50 else "Different paths"
+    }
+
+# ══════════════════════════════════════════════════════════════════
+# 10. ADMIN ENHANCEMENTS
+# ══════════════════════════════════════════════════════════════════
+
+@api_router.get("/admin/analytics")
+async def admin_analytics(admin: dict = Depends(require_admin)):
+    """Return aggregated analytics stats."""
+    now = datetime.now(timezone.utc)
+    thirty_days_ago = now - timedelta(days=30)
+
+    # Users over time (last 30 days)
+    users_pipeline = [
+        {"$match": {"created_at": {"$gte": thirty_days_ago}}},
+        {"$group": {"_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$created_at"}}, "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+    ]
+    users_over_time = await db.users.aggregate(users_pipeline).to_list(30)
+
+    # Events over time
+    events_pipeline = [
+        {"$match": {"created_at": {"$gte": thirty_days_ago}}},
+        {"$group": {"_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$created_at"}}, "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+    ]
+    events_over_time = await db.events.aggregate(events_pipeline).to_list(30)
+
+    # Posts over time
+    posts_pipeline = [
+        {"$match": {"created_at": {"$gte": thirty_days_ago}}},
+        {"$group": {"_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$created_at"}}, "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+    ]
+    posts_over_time = await db.posts.aggregate(posts_pipeline).to_list(30)
+
+    # Top churches (by followers)
+    top_churches = await db.churches.find({}, {"_id": 1, "name": 1, "followers": 1}).to_list(100)
+    top_churches.sort(key=lambda x: len(x.get("followers", [])), reverse=True)
+    top_churches = top_churches[:5]
+    for c in top_churches:
+        c["_id"] = str(c["_id"])
+        c["followers_count"] = len(c.get("followers", []))
+        c.pop("followers", None)
+
+    # Top events (by registrations)
+    top_events_pipeline = [
+        {"$group": {"_id": "$event_id", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 5}
+    ]
+    top_event_regs = await db.event_registrations.aggregate(top_events_pipeline).to_list(5)
+    top_events = []
+    for reg in top_event_regs:
+        event = await db.events.find_one({"_id": ObjectId(reg["_id"])}, {"_id": 1, "title": 1})
+        if event:
+            event["_id"] = str(event["_id"])
+            event["registrations_count"] = reg["count"]
+            top_events.append(event)
+
+    # Engagement rate
+    total_users = await db.users.count_documents({"status": "active"})
+    active_users_7d = await db.posts.count_documents({"created_at": {"$gte": now - timedelta(days=7)}})
+    engagement_rate = round((active_users_7d / total_users * 100) if total_users > 0 else 0, 2)
+
+    return {
+        "users_over_time": [{"date": u["_id"], "count": u["count"]} for u in users_over_time],
+        "events_over_time": [{"date": e["_id"], "count": e["count"]} for e in events_over_time],
+        "posts_over_time": [{"date": p["_id"], "count": p["count"]} for p in posts_over_time],
+        "top_churches": top_churches,
+        "top_events": top_events,
+        "engagement_rate": engagement_rate
+    }
+
+@api_router.post("/admin/bulk-action")
+async def admin_bulk_action(body: dict, admin: dict = Depends(require_admin)):
+    """Bulk approve/reject items."""
+    action = body.get("action")
+    item_type = body.get("type")
+    ids = body.get("ids", [])
+    if action not in ("approve", "reject"):
+        raise HTTPException(status_code=400, detail="Action must be 'approve' or 'reject'")
+    if item_type not in ("church", "user"):
+        raise HTTPException(status_code=400, detail="Type must be 'church' or 'user'")
+    if not ids:
+        raise HTTPException(status_code=400, detail="ids list required")
+    new_status = "active" if action == "approve" else "rejected"
+    collection = db.users if item_type == "user" else db.churches
+    object_ids = [ObjectId(id_str) for id_str in ids if ObjectId.is_valid(id_str)]
+    result = await collection.update_many({"_id": {"$in": object_ids}}, {"$set": {"status": new_status}})
+    await log_admin_action(admin["_id"], admin.get("name", "Admin"), f"BULK_{action.upper()}", item_type, ",".join(ids), f"Bulk {action}d {result.modified_count} {item_type}s")
+    return {"modified_count": result.modified_count, "action": action, "type": item_type}
+
+@api_router.get("/admin/export/{data_type}")
+async def admin_export_data(data_type: str, admin: dict = Depends(require_admin)):
+    """Export data as JSON."""
+    valid_types = {"users", "events", "churches", "posts"}
+    if data_type not in valid_types:
+        raise HTTPException(status_code=400, detail=f"data_type must be one of: {', '.join(valid_types)}")
+    collection_map = {"users": db.users, "events": db.events, "churches": db.churches, "posts": db.posts}
+    collection = collection_map[data_type]
+    data = await collection.find({}).limit(10000).to_list(10000)
+    for doc in data:
+        doc["_id"] = str(doc["_id"])
+        doc.pop("password_hash", None)
+    await log_admin_action(admin["_id"], admin.get("name", "Admin"), "EXPORT", data_type, "", f"Exported {len(data)} {data_type}")
+    return {"data_type": data_type, "count": len(data), "data": data}
+
+@api_router.get("/admin/system-health")
+async def admin_system_health(admin: dict = Depends(require_admin)):
+    """Return system health stats."""
+    # DB ping
+    try:
+        await db.command("ping")
+        db_status = "healthy"
+    except Exception:
+        db_status = "unhealthy"
+    total_users = await db.users.count_documents({})
+    total_posts = await db.posts.count_documents({})
+    # Count collections
+    collections = await db.list_collection_names()
+    import time
+    return {
+        "db_status": db_status,
+        "total_users": total_users,
+        "total_posts": total_posts,
+        "uptime": time.time(),
+        "collections_count": len(collections),
+        "collections": collections
+    }
+
+@api_router.get("/admin/feature-flags")
+async def get_feature_flags(admin: dict = Depends(require_admin)):
+    """Get all feature flags."""
+    flags = await db.feature_flags.find({}).to_list(100)
+    for f in flags:
+        f["_id"] = str(f["_id"])
+    return flags
+
+@api_router.post("/admin/feature-flags")
+async def create_or_update_feature_flag(flag: FeatureFlagCreate, admin: dict = Depends(require_admin)):
+    """Create or update a feature flag."""
+    result = await db.feature_flags.update_one(
+        {"key": flag.key},
+        {"$set": {"enabled": flag.enabled, "description": flag.description or "", "updated_at": datetime.now(timezone.utc), "updated_by": admin["_id"]}},
+        upsert=True
+    )
+    updated_flag = await db.feature_flags.find_one({"key": flag.key})
+    updated_flag["_id"] = str(updated_flag["_id"])
+    await log_admin_action(admin["_id"], admin.get("name", "Admin"), "UPDATE_FEATURE_FLAG", "feature_flag", flag.key, f"Set {flag.key} to {'enabled' if flag.enabled else 'disabled'}")
+    return updated_flag
+
+# ══════════════════════════════════════════════════════════════════
+# 11. EVENT CATEGORIES
+# ══════════════════════════════════════════════════════════════════
+
+EVENT_CATEGORIES = ["Worship", "Bible Study", "Conference", "Retreat", "Youth", "Outreach", "Fellowship", "Concert"]
+
+@api_router.get("/events/categories")
+async def get_event_categories():
+    """Return list of event categories."""
+    return {"categories": EVENT_CATEGORIES}
+
+# ══════════════════════════════════════════════════════════════════
+# 12. SHADOW BAN & 2FA
+# ══════════════════════════════════════════════════════════════════
+
+@api_router.put("/admin/users/{user_id}/shadow-ban")
+async def admin_shadow_ban(user_id: str, body: ShadowBanUpdate, admin: dict = Depends(require_admin)):
+    """Shadow ban/unban a user."""
+    result = await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"is_shadow_banned": body.is_shadow_banned}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    action_label = "SHADOW_BAN" if body.is_shadow_banned else "SHADOW_UNBAN"
+    target = await db.users.find_one({"_id": ObjectId(user_id)}, {"name": 1})
+    await log_admin_action(admin["_id"], admin.get("name", "Admin"), action_label, "user", user_id, f"{'Shadow banned' if body.is_shadow_banned else 'Un-shadow banned'} user: {target.get('name', '') if target else ''}")
+    return {"message": f"User {'shadow banned' if body.is_shadow_banned else 'un-shadow banned'}"}
+
+@api_router.post("/auth/enable-2fa")
+async def enable_2fa(user: dict = Depends(get_current_user)):
+    """Enable 2FA — generate TOTP secret, return QR code URL."""
+    secret = pyotp.random_base32()
+    await db.users.update_one({"_id": ObjectId(user["_id"])}, {"$set": {"two_fa_secret": secret, "two_fa_enabled": False}})
+    totp = pyotp.TOTP(secret)
+    provisioning_uri = totp.provisioning_uri(name=user.get("email", ""), issuer_name="CrossCrafted")
+    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={provisioning_uri}"
+    return {"secret": secret, "qr_url": qr_url, "provisioning_uri": provisioning_uri}
+
+@api_router.post("/auth/verify-2fa")
+async def verify_2fa(body: dict, user: dict = Depends(get_current_user)):
+    """Verify 2FA code and enable 2FA if successful."""
+    code = body.get("code", "")
+    user_doc = await db.users.find_one({"_id": ObjectId(user["_id"])}, {"two_fa_secret": 1})
+    if not user_doc or not user_doc.get("two_fa_secret"):
+        raise HTTPException(status_code=400, detail="2FA not set up. Call /auth/enable-2fa first.")
+    totp = pyotp.TOTP(user_doc["two_fa_secret"])
+    if totp.verify(code):
+        await db.users.update_one({"_id": ObjectId(user["_id"])}, {"$set": {"two_fa_enabled": True}})
+        return {"verified": True, "message": "2FA enabled successfully"}
+    raise HTTPException(status_code=400, detail="Invalid 2FA code")
+
+# ══════════════════════════════════════════════════════════════════
+# 13. PRAYERS + PRAYER REACTIONS
+# ══════════════════════════════════════════════════════════════════
+
+@api_router.post("/prayers")
+async def create_prayer(prayer: PrayerCreate, user: dict = Depends(get_current_user)):
+    """Create a prayer request."""
+    doc = {
+        "user_id": user["_id"],
+        "user_name": user.get("name", ""),
+        "user_image": user.get("profile_image", ""),
+        "text": prayer.text,
+        "is_anonymous": prayer.is_anonymous or False,
+        "prayer_count": 0,
+        "reactions": [],
+        "created_at": datetime.now(timezone.utc)
+    }
+    result = await db.prayers.insert_one(doc)
+    doc["_id"] = str(result.inserted_id)
+    return doc
+
+@api_router.get("/prayers")
+async def get_prayers(skip: int = 0, limit: int = 20):
+    """List prayer requests."""
+    prayers = await db.prayers.find({}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    for p in prayers:
+        p["_id"] = str(p["_id"])
+    return prayers
+
+@api_router.post("/prayers/{prayer_id}/pray")
+async def pray_for_prayer(prayer_id: str, user: dict = Depends(get_current_user)):
+    """Increment prayer count for a prayer request."""
+    result = await db.prayers.update_one(
+        {"_id": ObjectId(prayer_id)},
+        {"$inc": {"prayer_count": 1}, "$addToSet": {"prayed_by": user["_id"]}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Prayer not found")
+    return {"message": "Praying for you"}
+
+@api_router.post("/prayers/{prayer_id}/react")
+async def react_to_prayer(prayer_id: str, body: PrayerReactionCreate, user: dict = Depends(get_current_user)):
+    """Add a reaction emoji to a prayer."""
+    valid_emojis = ["🙏", "🤍", "✝️", "💪"]
+    if body.emoji not in valid_emojis:
+        raise HTTPException(status_code=400, detail=f"Invalid emoji. Must be one of: {', '.join(valid_emojis)}")
+    prayer = await db.prayers.find_one({"_id": ObjectId(prayer_id)})
+    if not prayer:
+        raise HTTPException(status_code=404, detail="Prayer not found")
+    reaction = {
+        "user_id": user["_id"],
+        "user_name": user.get("name", ""),
+        "emoji": body.emoji,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.prayers.update_one(
+        {"_id": ObjectId(prayer_id)},
+        {"$push": {"reactions": reaction}}
+    )
+    return reaction
+
+@api_router.get("/prayers/{prayer_id}/reactions")
+async def get_prayer_reactions(prayer_id: str):
+    """Get all reactions for a prayer."""
+    prayer = await db.prayers.find_one({"_id": ObjectId(prayer_id)}, {"reactions": 1})
+    if not prayer:
+        raise HTTPException(status_code=404, detail="Prayer not found")
+    return {"reactions": prayer.get("reactions", [])}
 
 app.include_router(api_router)
 

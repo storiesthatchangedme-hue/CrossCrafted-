@@ -17,11 +17,14 @@ const Events = () => {
   const [churches, setChurches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [formData, setFormData] = useState({ church_id: '', title: '', description: '', date: '', location: '', state: '', city: '', languages: [] });
+  const [formData, setFormData] = useState({ church_id: '', title: '', description: '', date: '', location: '', state: '', city: '', languages: [], category: '' });
   const [filterState, setFilterState] = useState('');
   const [filterLanguage, setFilterLanguage] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+
+  const EVENT_CATEGORIES = ['Worship', 'Bible Study', 'Conference', 'Retreat', 'Youth', 'Outreach', 'Fellowship', 'Concert'];
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -29,11 +32,12 @@ const Events = () => {
       const params = new URLSearchParams();
       if (filterState) params.append('state', filterState);
       if (filterLanguage) params.append('language', filterLanguage);
+      if (filterCategory) params.append('category', filterCategory);
       if (searchQuery) params.append('search', searchQuery);
       const { data } = await api.get(`/api/events?${params}`);
       setEvents(Array.isArray(data) ? data : data.events || []);
     } catch (_) { toast.error('Failed to load'); } finally { setLoading(false); }
-  }, [filterState, filterLanguage, searchQuery]);
+  }, [filterState, filterLanguage, filterCategory, searchQuery]);
 
   const fetchChurches = useCallback(async () => {
     try { const { data } = await api.get('/api/churches'); setChurches(data); } catch (_) { /* non-critical */ }
@@ -51,7 +55,7 @@ const Events = () => {
     } catch (_) { toast.error('Failed'); }
   };
 
-  const activeFilters = [filterState, filterLanguage, searchQuery].filter(Boolean).length;
+  const activeFilters = [filterState, filterLanguage, filterCategory, searchQuery].filter(Boolean).length;
 
   const handleRegister = async (e, eventId, isRegistered) => {
     e.stopPropagation();
@@ -119,9 +123,16 @@ const Events = () => {
                   {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
               </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1">Category</label>
+                <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="neo-input w-full text-sm" data-testid="events-category-filter" aria-label="Filter by category">
+                  <option value="">All Categories</option>
+                  {EVENT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
             </div>
             {activeFilters > 0 && (
-              <button onClick={() => { setFilterState(''); setFilterLanguage(''); setSearchQuery(''); }} className="mt-3 text-xs text-[#94A3B8] hover:text-white transition-colors" data-testid="events-clear-filters">Clear all filters</button>
+              <button onClick={() => { setFilterState(''); setFilterLanguage(''); setFilterCategory(''); setSearchQuery(''); }} className="mt-3 text-xs text-[#94A3B8] hover:text-white transition-colors" data-testid="events-clear-filters">Clear all filters</button>
             )}
           </motion.div>
         )}

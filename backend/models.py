@@ -112,3 +112,70 @@ class ProductUpdate(BaseModel):
     description: Optional[str] = None
     price: Optional[float] = None
     image: Optional[str] = None
+    category: Optional[str] = None
+
+# Bible Reading Plans
+class DailyReading(BaseModel):
+    day: int
+    book: str
+    chapter: int
+    verses: str
+
+class BiblePlanCreate(BaseModel):
+    title: str
+    description: str
+    duration_days: int
+    daily_readings: List[DailyReading]
+
+# Small Groups
+class SmallGroupCreate(BaseModel):
+    name: str
+    description: str
+    location: str
+    meeting_time: str
+    church_id: Optional[str] = None
+    languages: Optional[List[str]] = None
+    max_members: Optional[int] = 20
+    category: Optional[str] = None
+
+# Product Reviews
+class ProductReviewCreate(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    comment: Optional[str] = None
+
+# Announcements
+class AnnouncementCreate(BaseModel):
+    title: str
+    message: str
+    type: str = "info"  # info, warning, celebration
+    active_until: Optional[str] = None
+    is_active: Optional[bool] = True
+
+# Feature Flags
+class FeatureFlagCreate(BaseModel):
+    key: str
+    enabled: bool = False
+    description: Optional[str] = None
+
+# Streaks
+class StreakUpdate(BaseModel):
+    streak_type: str  # prayer, bible_reading, attendance
+
+# BFF Swipe
+class BffSwipeCreate(BaseModel):
+    target_id: str
+    action: str  # like, pass
+    mode: str = "bff"  # bff, matrimony
+
+# Shadow Ban
+class ShadowBanUpdate(BaseModel):
+    is_shadow_banned: bool
+
+# Prayer Reaction
+class PrayerReactionCreate(BaseModel):
+    emoji: str  # 🙏, 🤍, ✝️, 💪
+
+# Prayer Create
+class PrayerCreate(BaseModel):
+    text: str
+    is_anonymous: Optional[bool] = False

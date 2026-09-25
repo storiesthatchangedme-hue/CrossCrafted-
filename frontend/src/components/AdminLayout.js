@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useEffect } from 'react';
 import {
   LayoutDashboard, Users, FileText, Church, Calendar,
-  ShoppingBag, ArrowLeft, Shield, ScrollText, UserCheck, MessageCircle, HelpCircle, ShieldAlert, Building2, Store
+  ShoppingBag, ArrowLeft, Shield, ScrollText, UserCheck, MessageCircle, HelpCircle, ShieldAlert, Building2, Store, BarChart3, Megaphone, ToggleLeft
 } from 'lucide-react';
 
 const AdminLayout = () => {
@@ -23,6 +23,7 @@ const AdminLayout = () => {
 
   const navItems = [
     { path: '/app/admin', icon: LayoutDashboard, label: 'Dashboard', color: '#A855F7' },
+    { path: '/app/admin/analytics', icon: BarChart3, label: 'Analytics', color: '#06B6D4' },
     { path: '/app/admin/approvals', icon: UserCheck, label: 'Approvals', color: '#F59E0B' },
     { path: '/app/admin/users', icon: Users, label: 'Users', color: '#3B82F6' },
     { path: '/app/admin/churches', icon: Church, label: 'Churches', color: '#10B981' },
@@ -34,6 +35,8 @@ const AdminLayout = () => {
     { path: '/app/admin/posts', icon: FileText, label: 'Posts', color: '#EC4899' },
     { path: '/app/admin/reports', icon: ShieldAlert, label: 'Reports', color: '#EF4444' },
     { path: '/app/admin/comments', icon: MessageCircle, label: 'Comments', color: '#06B6D4' },
+    { path: '/app/admin/announcements', icon: Megaphone, label: 'Announcements', color: '#10B981' },
+    { path: '/app/admin/feature-flags', icon: ToggleLeft, label: 'Feature Flags', color: '#8B5CF6' },
     { path: '/app/admin/logs', icon: ScrollText, label: 'Activity', color: '#F97316' },
   ];
 

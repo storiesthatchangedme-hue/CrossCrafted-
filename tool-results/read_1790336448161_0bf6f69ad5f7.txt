@@ -1,0 +1,1726 @@
+     1→import { useState, useEffect, useRef } from 'react';
+     2→import { useAuth } from '@/contexts/AuthContext';
+     3→import { useNavigate, useLocation } from 'react-router-dom';
+     4→import api from '@/lib/api';
+     5→import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
+     6→import { 
+     7→  Heart, X, Sparkles, MapPin, Check, MessageSquare, BookOpen, User, Users, Compass, 
+     8→  MapPin as ChurchIcon, ArrowRight, Star, Send, ShieldCheck, RefreshCw, HeartHandshake, Smile, Coffee, Feather,
+     9→  Award, Church, Sliders, Flame, GraduationCap, ShieldAlert
+    10→} from 'lucide-react';
+    11→import { toast } from 'sonner';
+    12→
+    13→
+    14→const BadgeIcon = ({ name, size = 11, className }) => {
+    15→  switch (name) {
+    16→    case 'HeartHandshake': return <HeartHandshake size={size} className={className} />;
+    17→    case 'ShieldCheck': return <ShieldCheck size={size} className={className} />;
+    18→    case 'Flame': return <Flame size={size} className={className} />;
+    19→    case 'BookOpen': return <BookOpen size={size} className={className} />;
+    20→    case 'GraduationCap': return <GraduationCap size={size} className={className} />;
+    21→    case 'Sparkles': return <Sparkles size={size} className={className} />;
+    22→    case 'Users': return <Users size={size} className={className} />;
+    23→    default: return <Award size={size} className={className} />;
+    24→  }
+    25→};
+    26→
+    27→const CommunityBadges = ({ badges, limit = 3 }) => {
+    28→  if (!badges || !Array.isArray(badges) || badges.length === 0) return null;
+    29→  return (
+    30→    <div className="flex flex-wrap gap-1.5 mt-2">
+    31→      {badges.slice(0, limit).map(badge => (
+    32→        <div 
+    33→          key={badge.id}
+    34→          title={badge.description}
+    35→          className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all duration-200 cursor-help ${badge.color}`}
+    36→        >
+    37→          <BadgeIcon name={badge.icon} />
+    38→          <span>{badge.name}</span>
+    39→        </div>
+    40→      ))}
+    41→    </div>
+    42→  );
+    43→};
+    44→
+    45→export default function SocialFeed() {
+    46→  const { user, setUser } = useAuth();
+    47→  const navigate = useNavigate();
+    48→  const location = useLocation();
+    49→
+    50→  // Navigation tab inside Find BFFs page
+    51→  // 'discover' (the card swiper) vs 'compatible' (simple matching algorithm) vs 'connections' (matches and who liked me)
+    52→  const [activeTab, setActiveTab] = useState(() => {
+    53→    const params = new URLSearchParams(window.location.search);
+    54→    const tabParam = params.get('tab');
+    55→    return (tabParam === 'connections') ? 'connections' : 'discover';
+    56→  });
+    57→
+    58→  useEffect(() => {
+    59→    const params = new URLSearchParams(location.search);
+    60→    const tabParam = params.get('tab');
+    61→    if (tabParam && ['discover', 'compatible', 'connections'].includes(tabParam)) {
+    62→      setActiveTab(tabParam);
+    63→    }
+    64→  }, [location.search]);
+    65→
+    66→  // Compatibility Matching states
+    67→  const [compatibleProfiles, setCompatibleProfiles] = useState([]);
+    68→  const [loadingCompatible, setLoadingCompatible] = useState(false);
+    69→  const [localLikedIds, setLocalLikedIds] = useState([]);
+    70→
+    71→  // Discover state
+    72→  const [candidates, setCandidates] = useState([]);
+    73→  const [currentIndex, setCurrentIndex] = useState(0);
+    74→  const [loading, setLoading] = useState(true);
+    75→  const [swiping, setSwiping] = useState(null); // 'like' or 'pass'
+    76→  
+    77→  // Connections/Matches State
+    78→  const [matches, setMatches] = useState([]);
+    79→  const [whoLikedMe, setWhoLikedMe] = useState([]);
+    80→  const [loadingConns, setLoadingConns] = useState(false);
+    81→
+    82→  // Match Celebration Overlay State
+    83→  const [matchCelebration, setMatchCelebration] = useState(null); // { other_user, conversation_id }
+    84→  const [icebreakerText, setIcebreakerText] = useState('Hey! I see we share some great faith interests. Let\'s grab coffee sometime! ☕');
+    85→  const [sendingIcebreaker, setSendingIcebreaker] = useState(false);
+    86→
+    87→  // Safe Intro State for Matrimony mode
+    88→  const [safeIntroModal, setSafeIntroModal] = useState(null); // { user_id, name }
+    89→  const [safeIntroPrompt, setSafeIntroPrompt] = useState('How can I lift you up in prayer this week? 🙏');
+    90→  const [safeIntroAnswer, setSafeIntroAnswer] = useState('');
+    91→  const [sendingSafeIntro, setSendingSafeIntro] = useState(false);
+    92→
+    93→  // Match Mode state ('bff' or 'matrimony')
+    94→  const [matchMode, setMatchMode] = useState('bff');
+    95→
+    96→  // Quick edit profile inside Discover state
+    97→  const [isEditingProfile, setIsEditingProfile] = useState(false);
+    98→  const [showDeepReport, setShowDeepReport] = useState(false);
+    99→  const [editedProfile, setEditedProfile] = useState({
+   100→    age: user?.age || 26,
+   101→    gender: user?.gender || 'Male',
+   102→    denomination: user?.denomination || 'Non-denominational',
+   103→    home_church: user?.home_church || 'Grace Bible Church',
+   104→    favorite_verse: user?.favorite_verse || 'Proverbs 27:17 - "Iron sharpens iron, and one man sharpens another."',
+   105→    interests: user?.interests || ['Bible Study', 'Coffee Chat', 'Worship'],
+   106→    friendship_goals: user?.friendship_goals || 'Looking for a prayer partner & fellow believer.',
+   107→    bio: user?.bio || 'Faith-first, community-driven.',
+   108→    match_mode: user?.match_mode || 'both',
+   109→    marital_status: user?.marital_status || 'Never Married',
+   110→    family_values: user?.family_values || 'Traditional',
+   111→    marriage_timeline: user?.marriage_timeline || 'Within 1-2 years',
+   112→    spouse_expectations: user?.spouse_expectations || 'Seeking a loving partner to build a Christ-centered household.'
+   113→  });
+   114→
+   115→  // Motion values for swiping/dragging
+   116→  const x = useMotionValue(0);
+   117→  const rotate = useTransform(x, [-150, 150], [-15, 15]);
+   118→  const yesOpacity = useTransform(x, [0, 80], [0, 1]);
+   119→  const noOpacity = useTransform(x, [-80, 0], [1, 0]);
+   120→
+   121→  // Reset motion value when candidate changes
+   122→  useEffect(() => {
+   123→    x.set(0);
+   124→  }, [currentIndex, x]);
+   125→
+   126→  const [aiMatchDetails, setAiMatchDetails] = useState(null);
+   127→  const [loadingAiMatch, setLoadingAiMatch] = useState(false);
+   128→
+   129→  // Automatically fetch AI match compatibility for the active card
+   130→  useEffect(() => {
+   131→    if (activeTab === 'discover' && candidates && candidates.length > 0 && currentIndex < candidates.length) {
+   132→      const candidate = candidates[currentIndex];
+   133→      const fetchAiMatch = async () => {
+   134→        setLoadingAiMatch(true);
+   135→        setAiMatchDetails(null);
+   136→        try {
+   137→          const { data } = await api.get(`/api/bff/ai-match?target_id=${candidate._id}`);
+   138→          setAiMatchDetails(data);
+   139→        } catch (e) {
+   140→          console.error('Error fetching AI match info:', e);
+   141→        } finally {
+   142→          setLoadingAiMatch(false);
+   143→        }
+   144→      };
+   145→      fetchAiMatch();
+   146→    } else {
+   147→      setAiMatchDetails(null);
+   148→    }
+   149→  }, [currentIndex, candidates, activeTab]);
+   150→
+   151→  // Fetch candidates to swipe on
+   152→  const fetchCandidates = async (currentMode = matchMode) => {
+   153→    try {
+   154→      setLoading(true);
+   155→      const { data } = await api.get(`/api/bff/discover?mode=${currentMode}`);
+   156→      setCandidates(data.candidates || []);
+   157→      setCurrentIndex(0);
+   158→    } catch (err) {
+   159→      console.error('Error fetching BFF candidates:', err);
+   160→      toast.error('Failed to load potential candidates.');
+   161→    } finally {
+   162→      setLoading(false);
+   163→    }
+   164→  };
+   165→
+   166→  // Fetch matches & likes
+   167→  const fetchConnections = async () => {
+   168→    try {
+   169→      setLoadingConns(true);
+   170→      const { data } = await api.get('/api/bff/connections');
+   171→      setMatches(data.matches || []);
+   172→      setWhoLikedMe(data.whoLikedMe || []);
+   173→    } catch (err) {
+   174→      console.error('Error fetching BFF connections:', err);
+   175→    } finally {
+   176→      setLoadingConns(false);
+   177→    }
+   178→  };
+   179→
+   180→  // Fetch compatible profiles based on shared interests or location
+   181→  const fetchCompatibleProfiles = async (currentMode = matchMode) => {
+   182→    setLoadingCompatible(true);
+   183→    try {
+   184→      const { data } = await api.get(`/api/bff/compatible?mode=${currentMode}`);
+   185→      setCompatibleProfiles(data.compatible_profiles || []);
+   186→    } catch (err) {
+   187→      console.error('Error fetching compatible profiles:', err);
+   188→      toast.error('Failed to load compatible matches.');
+   189→    } finally {
+   190→      setLoadingCompatible(false);
+   191→    }
+   192→  };
+   193→
+   194→  const getBffSwipedLikedIds = () => {
+   195→    return [...localLikedIds];
+   196→  };
+   197→
+   198→  const handleCompatibleConnect = async (targetId, targetName) => {
+   199→    try {
+   200→      setLocalLikedIds(prev => [...prev, targetId]);
+   201→      
+   202→      const { data } = await api.post(
+   203→        '/api/bff/swipe',
+   204→        { target_id: targetId, action: 'like' }
+   205→      );
+   206→
+   207→      if (data.matched) {
+   208→        setMatchCelebration({
+   209→          other_user: {
+   210→            _id: targetId,
+   211→            name: targetName,
+   212→            profile_image: compatibleProfiles.find(p => p._id === targetId)?.profile_image || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80'
+   213→          },
+   214→          conversation_id: data.conversation_id
+   215→        });
+   216→        toast.success(`You connected with ${targetName}! 🎉`);
+   217→        fetchConnections();
+   218→      } else {
+   219→        toast.success('Connection request sent! 🙏');
+   220→      }
+   221→    } catch (err) {
+   222→      console.error('Error connecting with compatible user:', err);
+   223→      toast.error('Could not send connection request.');
+   224→    }
+   225→  };
+   226→
+   227→  useEffect(() => {
+   228→    if (activeTab === 'discover') {
+   229→      fetchCandidates(matchMode);
+   230→    }
+   231→    fetchConnections();
+   232→    if (activeTab === 'compatible') {
+   233→      fetchCompatibleProfiles(matchMode);
+   234→    }
+   235→  }, [activeTab, matchMode]);
+   236→
+   237→  // Handle Swipe action (like/pass)
+   238→  const handleSwipe = async (action, targetId) => {
+   239→    if (swiping) return;
+   240→    setSwiping(action);
+   241→
+   242→    try {
+   243→      // Optimistic transition
+   244→      setTimeout(() => {
+   245→        setCurrentIndex(prev => prev + 1);
+   246→        setSwiping(null);
+   247→      }, 400);
+   248→
+   249→      const { data } = await api.post(
+   250→        '/api/bff/swipe',
+   251→        { target_id: targetId, action }
+   252→      );
+   253→
+   254→      if (data.matched) {
+   255→        setMatchCelebration({
+   256→          other_user: data.other_user,
+   257→          conversation_id: data.conversation_id
+   258→        });
+   259→        toast.success(`You connected with ${data.other_user?.name}! 🎉`);
+   260→        fetchConnections();
+   261→      } else {
+   262→        if (action === 'like') {
+   263→          toast.info('Connection request sent! 🙏');
+   264→        }
+   265→      }
+   266→    } catch (err) {
+   267→      console.error('Error recording swipe:', err);
+   268→      toast.error('Connection failed. Please try again.');
+   269→      setSwiping(null);
+   270→    }
+   271→  };
+   272→
+   273→  // Keyboard controls for swiping
+   274→  useEffect(() => {
+   275→    const handleKeyDown = (e) => {
+   276→      if (activeTab !== 'discover' || isEditingProfile || matchCelebration) return;
+   277→      if (currentIndex >= candidates.length) return;
+   278→
+   279→      const currentCandidate = candidates[currentIndex];
+   280→      if (e.key === 'ArrowRight') {
+   281→        handleSwipe('like', currentCandidate._id);
+   282→      } else if (e.key === 'ArrowLeft') {
+   283→        handleSwipe('pass', currentCandidate._id);
+   284→      }
+   285→    };
+   286→
+   287→    window.addEventListener('keydown', handleKeyDown);
+   288→    return () => window.removeEventListener('keydown', handleKeyDown);
+   289→  }, [activeTab, currentIndex, candidates, isEditingProfile, matchCelebration]);
+   290→
+   291→  // Handle Match Celebration Icebreaker send
+   292→  const sendMatchIcebreaker = async () => {
+   293→    if (!matchCelebration) return;
+   294→    setSendingIcebreaker(true);
+   295→    try {
+   296→      await api.post(
+   297→        '/api/conversations/${matchCelebration.conversation_id}/messages',
+   298→        { text: icebreakerText }
+   299→      );
+   300→      toast.success('Awesome! Icebreaker sent. 👋');
+   301→      navigate(`/app/messages/${matchCelebration.conversation_id}`);
+   302→    } catch (err) {
+   303→      console.error('Error sending icebreaker:', err);
+   304→      toast.error('Could not send message, but you can message them in DMs!');
+   305→    } finally {
+   306→      setSendingIcebreaker(false);
+   307→      setMatchCelebration(null);
+   308→    }
+   309→  };
+   310→
+   311→  // Safe Intro Chat initialization logic
+   312→  const handleStartChat = async (otherUserId, otherUserName) => {
+   313→    try {
+   314→      // First, see if conversation already exists & has messages
+   315→      const { data: convResponse } = await api.get('/api/conversations');
+   316→      const existingConvo = convResponse.conversations?.find(c => c.other_user?._id === otherUserId);
+   317→      
+   318→      if (matchMode === 'matrimony') {
+   319→        // If matrimony mode, see if they've had any previous messages. If not, trigger Safe Intro!
+   320→        if (!existingConvo || !existingConvo.last_message) {
+   321→          setSafeIntroModal({ user_id: otherUserId, name: otherUserName });
+   322→          setSafeIntroAnswer('');
+   323→          return;
+   324→        }
+   325→      }
+   326→      
+   327→      // If BFF mode, or already has messages, navigate directly
+   328→      const { data } = await api.post('/api/conversations', { user_id: otherUserId });
+   329→      navigate(`/app/messages/${data.conversation_id}`);
+   330→    } catch (err) {
+   331→      console.error('Error starting chat:', err);
+   332→      toast.error('Could not initiate chat.');
+   333→    }
+   334→  };
+   335→
+   336→  const submitSafeIntro = async () => {
+   337→    if (!safeIntroModal || !safeIntroAnswer.trim()) return;
+   338→    if (safeIntroAnswer.trim().length < 15) {
+   339→      toast.error('Please write a slightly more detailed prayer request or response (at least 15 characters).');
+   340→      return;
+   341→    }
+   342→
+   343→    setSendingSafeIntro(true);
+   344→    try {
+   345→      // Create conversation
+   346→      const { data: convoData } = await api.post(
+   347→        '/api/conversations',
+   348→        { user_id: safeIntroModal.user_id }
+   349→      );
+   350→
+   351→      const conversationId = convoData.conversation_id;
+   352→
+   353→      // Send Safe Intro as the first message
+   354→      const introMessage = `🕊️ [MATRIMONY SAFE INTRO]\nPrompt: "${safeIntroPrompt}"\n\n🙏 Response / Prayer Request:\n"${safeIntroAnswer.trim()}"`;
+   355→      
+   356→      await api.post(
+   357→        '/api/conversations/${conversationId}/messages',
+   358→        { text: introMessage }
+   359→      );
+   360→
+   361→      toast.success('Safe Intro shared! Faith connection unlocked. 🕊️');
+   362→      setSafeIntroModal(null);
+   363→      navigate(`/app/messages/${conversationId}`);
+   364→    } catch (err) {
+   365→      console.error('Error sharing safe intro:', err);
+   366→      toast.error('Failed to submit Safe Intro.');
+   367→    } finally {
+   368→      setSendingSafeIntro(false);
+   369→    }
+   370→  };
+   371→
+   372→  // Save updated user profile
+   373→  const saveBffProfile = async () => {
+   374→    try {
+   375→      const { data } = await api.put('/api/bff/profile', editedProfile);
+   376→      setUser(data.user);
+   377→      toast.success('BFF/Matrimony profile updated successfully! 🙏');
+   378→      setIsEditingProfile(false);
+   379→      // Refresh candidates list
+   380→      fetchCandidates(matchMode);
+   381→    } catch (err) {
+   382→      console.error('Error updating profile:', err);
+   383→      toast.error('Failed to update profile attributes.');
+   384→    }
+   385→  };
+   386→
+   387→  const handleToggleTag = (tag) => {
+   388→    const isSelected = editedProfile.interests.includes(tag);
+   389→    const newTags = isSelected
+   390→      ? editedProfile.interests.filter(t => t !== tag)
+   391→      : [...editedProfile.interests, tag];
+   392→    setEditedProfile(prev => ({ ...prev, interests: newTags }));
+   393→  };
+   394→
+   395→  const availableInterests = [
+   396→    'Bible Study', 'Coffee Chat', 'Worship Music', 'Hiking', 'Theology',
+   397→    'Community Service', 'Gym & Health', 'Sunday Brunch', 'Youth Group',
+   398→    'Mission Trips', 'Fellowship', 'Apologetics', 'Board Games', 'Prayer Partner'
+   399→  ];
+   400→
+   401→  const currentCandidate = candidates[currentIndex];
+   402→
+   403→  return (
+   404→    <div className="max-w-md mx-auto px-4 pt-4 pb-24 md:pt-6 md:pb-6 relative min-h-[calc(100vh-60px)] flex flex-col">
+   405→      {/* ── Match Mode Switcher (BFF vs. Matrimony) ── */}
+   406→      <div className="flex bg-[#111827] p-1.5 rounded-[20px] mb-4 border border-white/[0.08] items-center relative overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.2)]">
+   407→        <div className="absolute inset-0 bg-gradient-to-r from-[#7C3AED]/10 to-[#38BDF8]/10 pointer-events-none" />
+   408→        <button
+   409→          onClick={() => setMatchMode('bff')}
+   410→          className={`flex-1 py-2 rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all duration-300 relative z-10 ${
+   411→            matchMode === 'bff'
+   412→              ? 'bg-[#1F2937] text-[#F9FAFB] border border-[#7C3AED]/30 shadow-[0_4px_15px_rgba(124,58,237,0.2)] font-extrabold scale-[1.02]'
+   413→              : 'text-[#94A3B8] hover:text-[#F9FAFB]'
+   414→          }`}
+   415→        >
+   416→          <Users size={14} className={matchMode === 'bff' ? 'text-[#7C3AED]' : 'text-[#64748B]'} />
+   417→          BFF Mode 🤝
+   418→        </button>
+   419→        <button
+   420→          onClick={() => setMatchMode('matrimony')}
+   421→          className={`flex-1 py-2 rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all duration-300 relative z-10 ${
+   422→            matchMode === 'matrimony'
+   423→              ? 'bg-[#1F2937] text-[#F9FAFB] border border-[#FB7185]/30 shadow-[0_4px_15px_rgba(251,113,133,0.2)] font-extrabold scale-[1.02]'
+   424→              : 'text-[#94A3B8] hover:text-[#F9FAFB]'
+   425→          }`}
+   426→        >
+   427→          <Heart size={14} fill={matchMode === 'matrimony' ? 'currentColor' : 'none'} className={matchMode === 'matrimony' ? 'text-[#FB7185]' : 'text-[#64748B]'} />
+   428→          Matrimony Mode 💍
+   429→        </button>
+   430→      </div>
+   431→
+   432→      {/* ── Tabs Header ── */}
+   433→      <div className="flex bg-[#111827] p-1.5 rounded-[20px] mb-5 border border-white/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.2)]">
+   434→        <button
+   435→          onClick={() => { setActiveTab('discover'); navigate('/app/feed?tab=discover', { replace: true }); }}
+   436→          className={`flex-1 py-2.5 rounded-2xl font-bold text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all duration-300 ${
+   437→            activeTab === 'discover'
+   438→              ? 'bg-gradient-to-br from-[#7C3AED] to-[#2563EB] text-white shadow-[0_4px_15px_rgba(124,58,237,0.4)]'
+   439→              : 'text-[#94A3B8] hover:text-[#F9FAFB]'
+   440→          }`}
+   441→          data-testid="tab-discover"
+   442→        >
+   443→          <Sparkles size={14} />
+   444→          Discover
+   445→        </button>
+   446→        <button
+   447→          onClick={() => { setActiveTab('compatible'); navigate('/app/feed?tab=compatible', { replace: true }); }}
+   448→          className={`flex-1 py-2.5 rounded-2xl font-bold text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all duration-300 ${
+   449→            activeTab === 'compatible'
+   450→              ? 'bg-gradient-to-br from-[#7C3AED] to-[#2563EB] text-white shadow-[0_4px_15px_rgba(124,58,237,0.4)]'
+   451→              : 'text-[#94A3B8] hover:text-[#F9FAFB]'
+   452→          }`}
+   453→          data-testid="tab-compatible"
+   454→        >
+   455→          <Award size={14} />
+   456→          Top Matches
+   457→        </button>
+   458→        <button
+   459→          onClick={() => { setActiveTab('connections'); navigate('/app/feed?tab=connections', { replace: true }); }}
+   460→          className={`flex-1 py-2.5 rounded-2xl font-bold text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all duration-300 relative ${
+   461→            activeTab === 'connections'
+   462→              ? 'bg-gradient-to-br from-[#7C3AED] to-[#2563EB] text-white shadow-[0_4px_15px_rgba(124,58,237,0.4)]'
+   463→              : 'text-[#94A3B8] hover:text-[#F9FAFB]'
+   464→          }`}
+   465→          data-testid="tab-connections"
+   466→        >
+   467→          <HeartHandshake size={14} />
+   468→          Connections
+   469→          {whoLikedMe.length > 0 && (
+   470→            <span className="absolute top-1.5 right-1 w-4 h-4 rounded-full bg-[#FB7185] text-[9px] font-extrabold text-white flex items-center justify-center animate-bounce shadow-[0_0_10px_rgba(251,113,133,0.5)]">
+   471→              {whoLikedMe.length}
+   472→            </span>
+   473→          )}
+   474→        </button>
+   475→      </div>
+   476→
+   477→      {/* ── Active Tab Content ── */}
+   478→      <AnimatePresence mode="wait">
+   479→        {activeTab === 'discover' && (
+   480→          /* ════════════════ DISCOVER TAB (CARD SWIPER) ════════════════ */
+   481→          <motion.div
+   482→            key="discover"
+   483→            initial={{ opacity: 0, y: 10 }}
+   484→            animate={{ opacity: 1, y: 0 }}
+   485→            exit={{ opacity: 0, y: -10 }}
+   486→            transition={{ duration: 0.25 }}
+   487→            className="flex-1 flex flex-col justify-between"
+   488→          >
+   489→            {/* Complete Profile Notification Bar */}
+   490→            {(!user?.denomination || !user?.favorite_verse) && !isEditingProfile && (
+   491→              <motion.div 
+   492→                initial={{ opacity: 0 }}
+   493→                animate={{ opacity: 1 }}
+   494→                className="mb-4 p-3 bg-#0284C7/10 border border-#0284C7/20 rounded-2xl flex items-center justify-between gap-3 text-#7DD3FC text-xs"
+   495→              >
+   496→                <div className="flex items-center gap-2">
+   497→                  <Feather size={14} className="shrink-0" />
+   498→                  <span>Update your Christian tags so matches find you!</span>
+   499→                </div>
+   500→                <button 
+   501→                  onClick={() => setIsEditingProfile(true)} 
+   502→                  className="px-2.5 py-1 bg-#38BDF8 text-slate-900 font-bold rounded-lg hover:bg-#0284C7 transition-colors shrink-0"
+   503→                >
+   504→                  Edit
+   505→                </button>
+   506→              </motion.div>
+   507→            )}
+   508→
+   509→            {loading ? (
+   510→              <div className="flex-1 flex flex-col items-center justify-center py-20 text-center gap-3">
+   511→                <RefreshCw className="animate-spin text-#38BDF8" size={32} />
+   512→                <p className="text-[#94A3B8] text-sm font-medium">Finding friendly Christian hearts...</p>
+   513→              </div>
+   514→            ) : isEditingProfile ? (
+   515→              /* ── INLINE PROFILE EDITOR ── */
+   516→              <div className="bg-[#1E293B] border border-white/[0.04] p-5 rounded-3xl space-y-4 shadow-xl">
+   517→                <div className="flex items-center justify-between border-b border-white/[0.04] pb-3">
+   518→                  <h3 className="font-bold text-white flex items-center gap-2 text-sm uppercase tracking-wider">
+   519→                    <Smile className="text-#38BDF8" size={16} />
+   520→                    My BFF Identity Card
+   521→                  </h3>
+   522→                  <button 
+   523→                    onClick={() => setIsEditingProfile(false)}
+   524→                    className="text-xs text-[#64748B] hover:text-white transition-colors"
+   525→                  >
+   526→                    Cancel
+   527→                  </button>
+   528→                </div>
+   529→
+   530→                <div className="grid grid-cols-2 gap-3">
+   531→                  <div>
+   532→                    <label className="block text-[10px] uppercase font-bold text-[#64748B] mb-1">Age</label>
+   533→                    <input 
+   534→                      type="number" 
+   535→                      value={editedProfile.age} 
+   536→                      onChange={(e) => setEditedProfile(p => ({ ...p, age: e.target.value }))}
+   537→                      className="w-full bg-slate-900 border border-white/[0.06] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-#38BDF8"
+   538→                    />
+   539→                  </div>
+   540→                  <div>
+   541→                    <label className="block text-[10px] uppercase font-bold text-[#64748B] mb-1">Gender</label>
+   542→                    <select 
+   543→                      value={editedProfile.gender} 
+   544→                      onChange={(e) => setEditedProfile(p => ({ ...p, gender: e.target.value }))}
+   545→                      className="w-full bg-slate-900 border border-white/[0.06] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-#38BDF8"
+   546→                    >
+   547→                      <option value="Male">Male</option>
+   548→                      <option value="Female">Female</option>
+   549→                      <option value="Non-binary">Non-binary</option>
+   550→                    </select>
+   551→                  </div>
+   552→                </div>
+   553→
+   554→                <div>
+   555→                  <label className="block text-[10px] uppercase font-bold text-[#64748B] mb-1">My Denomination / Faith Background</label>
+   556→                  <input 
+   557→                    type="text" 
+   558→                    placeholder="e.g. Baptist, Non-denominational, Lutheran"
+   559→                    value={editedProfile.denomination} 
+   560→                    onChange={(e) => setEditedProfile(p => ({ ...p, denomination: e.target.value }))}
+   561→                    className="w-full bg-slate-900 border border-white/[0.06] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-#38BDF8"
+   562→                  />
+   563→                </div>
+   564→
+   565→                <div>
+   566→                  <label className="block text-[10px] uppercase font-bold text-[#64748B] mb-1">My Local Church (Home Church)</label>
+   567→                  <input 
+   568→                    type="text" 
+   569→                    placeholder="e.g. Hillside Community Church"
+   570→                    value={editedProfile.home_church} 
+   571→                    onChange={(e) => setEditedProfile(p => ({ ...p, home_church: e.target.value }))}
+   572→                    className="w-full bg-slate-900 border border-white/[0.06] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-#38BDF8"
+   573→                  />
+   574→                </div>
+   575→
+   576→                <div>
+   577→                  <label className="block text-[10px] uppercase font-bold text-[#64748B] mb-1">Favorite Scripture / Quote</label>
+   578→                  <textarea 
+   579→                    rows={2}
+   580→                    placeholder="e.g. Proverbs 27:17..."
+   581→                    value={editedProfile.favorite_verse} 
+   582→                    onChange={(e) => setEditedProfile(p => ({ ...p, favorite_verse: e.target.value }))}
+   583→                    className="w-full bg-slate-900 border border-white/[0.06] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-#38BDF8"
+   584→                  />
+   585→                </div>
+   586→
+   587→                <div>
+   588→                  <label className="block text-[10px] uppercase font-bold text-[#64748B] mb-1.5">Friendship Goals</label>
+   589→                  <input 
+   590→                    type="text" 
+   591→                    placeholder="e.g. Coffee chat, Bible study partner..."
+   592→                    value={editedProfile.friendship_goals} 
+   593→                    onChange={(e) => setEditedProfile(p => ({ ...p, friendship_goals: e.target.value }))}
+   594→                    className="w-full bg-slate-900 border border-white/[0.06] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-#38BDF8"
+   595→                  />
+   596→                </div>
+   597→
+   598→                <div>
+   599→                  <label className="block text-[10px] uppercase font-bold text-[#64748B] mb-1.5">My Interests / Spiritual Focus Pill Tags (Select up to 5)</label>
+   600→                  <div className="flex flex-wrap gap-1.5 max-h-[140px] overflow-y-auto p-2 bg-slate-950 rounded-xl border border-white/[0.04]">
+   601→                    {availableInterests.map(interest => {
+   602→                      const selected = editedProfile.interests.includes(interest);
+   603→                      return (
+   604→                        <button
+   605→                          key={interest}
+   606→                          type="button"
+   607→                          onClick={() => handleToggleTag(interest)}
+   608→                          className={`px-2.5 py-1 text-[10.5px] font-bold rounded-lg transition-all ${
+   609→                            selected 
+   610→                              ? 'bg-#38BDF8 text-slate-950'
+   611→                              : 'bg-white/[0.04] text-[#64748B] hover:text-white'
+   612→                          }`}
+   613→                        >
+   614→                          {selected ? '✓ ' : ''}{interest}
+   615→                        </button>
+   616→                      );
+   617→                    })}
+   618→                  </div>
+   619→                </div>
+   620→
+   621→                {/* Matrimony Specific Profile Settings */}
+   622→                <div className="border-t border-white/[0.04] pt-4 mt-2 space-y-4">
+   623→                  <h4 className="text-xs font-bold text-#38BDF8 uppercase tracking-widest flex items-center gap-1.5">
+   624→                    💍 Matrimony & Marriage Settings
+   625→                  </h4>
+   626→                  
+   627→                  <div>
+   628→                    <label className="block text-[10px] uppercase font-bold text-[#64748B] mb-1">My Matching Intent</label>
+   629→                    <select 
+   630→                      value={editedProfile.match_mode} 
+   631→                      onChange={(e) => setEditedProfile(p => ({ ...p, match_mode: e.target.value }))}
+   632→                      className="w-full bg-slate-900 border border-white/[0.06] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-#38BDF8"
+   633→                    >
+   634→                      <option value="bff">Looking for Friends only (BFF Mode) 🤝</option>
+   635→                      <option value="matrimony">Looking for a Lifelong Partner (Matrimony Mode) 💍</option>
+   636→                      <option value="both">Open to both Friends & Lifelong Partner (Both Modes) ✨</option>
+   637→                    </select>
+   638→                  </div>
+   639→
+   640→                  <div className="grid grid-cols-2 gap-3">
+   641→                    <div>
+   642→                      <label className="block text-[10px] uppercase font-bold text-[#64748B] mb-1">Marital Status</label>
+   643→                      <select 
+   644→                        value={editedProfile.marital_status} 
+   645→                        onChange={(e) => setEditedProfile(p => ({ ...p, marital_status: e.target.value }))}
+   646→                        className="w-full bg-slate-900 border border-white/[0.06] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-#38BDF8"
+   647→                      >
+   648→                        <option value="Never Married">Never Married</option>
+   649→                        <option value="Single">Single</option>
+   650→                        <option value="Divorced">Divorced</option>
+   651→                        <option value="Widowed">Widowed</option>
+   652→                      </select>
+   653→                    </div>
+   654→                    <div>
+   655→                      <label className="block text-[10px] uppercase font-bold text-[#64748B] mb-1">Family Values</label>
+   656→                      <select 
+   657→                        value={editedProfile.family_values} 
+   658→                        onChange={(e) => setEditedProfile(p => ({ ...p, family_values: e.target.value }))}
+   659→                        className="w-full bg-slate-900 border border-white/[0.06] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-#38BDF8"
+   660→                      >
+   661→                        <option value="Traditional">Traditional</option>
+   662→                        <option value="Conservative">Conservative</option>
+   663→                        <option value="Moderate">Moderate</option>
+   664→                        <option value="Liberal">Liberal</option>
+   665→                      </select>
+   666→                    </div>
+   667→                  </div>
+   668→
+   669→                  <div>
+   670→                    <label className="block text-[10px] uppercase font-bold text-[#64748B] mb-1">Marriage Timeline</label>
+   671→                    <select 
+   672→                      value={editedProfile.marriage_timeline} 
+   673→                      onChange={(e) => setEditedProfile(p => ({ ...p, marriage_timeline: e.target.value }))}
+   674→                      className="w-full bg-slate-900 border border-white/[0.06] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-#38BDF8"
+   675→                    >
+   676→                      <option value="Within 1 year">Within 1 year</option>
+   677→                      <option value="Within 1-2 years">Within 1-2 years</option>
+   678→                      <option value="Within 3+ years">Within 3+ years</option>
+   679→                      <option value="Just exploring">Just exploring / Wait on God</option>
+   680→                    </select>
+   681→                  </div>
+   682→
+   683→                  <div>
+   684→                    <label className="block text-[10px] uppercase font-bold text-[#64748B] mb-1">What are you seeking in a spouse?</label>
+   685→                    <textarea 
+   686→                      rows={2}
+   687→                      placeholder="e.g. A dedicated believer who loves serving and values family life..."
+   688→                      value={editedProfile.spouse_expectations} 
+   689→                      onChange={(e) => setEditedProfile(p => ({ ...p, spouse_expectations: e.target.value }))}
+   690→                      className="w-full bg-slate-900 border border-white/[0.06] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-#38BDF8"
+   691→                    />
+   692→                  </div>
+   693→                </div>
+   694→
+   695→                <button
+   696→                  onClick={saveBffProfile}
+   697→                  className="w-full py-3 bg-#38BDF8 hover:bg-#0284C7 text-slate-900 font-bold rounded-2xl text-xs uppercase tracking-widest shadow-lg transition-all"
+   698→                >
+   699→                  Save and Discover Matches
+   700→                </button>
+   701→              </div>
+   702→            ) : currentIndex >= candidates.length ? (
+   703→              /* ── END OF CARDS ── */
+   704→              <div className="flex-1 flex flex-col items-center justify-center py-16 text-center px-4">
+   705→                <div className="w-16 h-16 rounded-full bg-#38BDF8/10 border border-#0284C7/25 flex items-center justify-center mb-5 animate-pulse">
+   706→                  <Coffee className="text-#38BDF8" size={28} />
+   707→                </div>
+   708→                <h3 className="text-white font-bold text-lg mb-2">You've Discovered Everyone nearby!</h3>
+   709→                <p className="text-[#64748B] text-sm max-w-xs mb-6">
+   710→                  Check back soon for new brothers and sisters. Take a moment to pray for your future connections today! 🙏
+   711→                </p>
+   712→                <div className="flex flex-col gap-2.5 w-full">
+   713→                  <button
+   714→                    onClick={fetchCandidates}
+   715→                    className="w-full py-3 bg-#38BDF8 hover:bg-#0284C7 text-slate-900 font-bold rounded-2xl text-xs uppercase tracking-widest shadow-lg flex items-center justify-center gap-2 transition-all"
+   716→                  >
+   717→                    <RefreshCw size={14} />
+   718→                    Refresh Feed
+   719→                  </button>
+   720→                  <button
+   721→                    onClick={() => setIsEditingProfile(true)}
+   722→                    className="w-full py-3 bg-white/[0.04] hover:bg-white/[0.08] text-white border border-white/[0.06] font-bold rounded-2xl text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
+   723→                  >
+   724→                    <User size={14} />
+   725→                    Edit My BFF Tags
+   726→                  </button>
+   727→                </div>
+   728→              </div>
+   729→            ) : (
+   730→              /* ── SWIPER CARDS DECK ── */
+   731→              <div className="flex-1 flex flex-col justify-between">
+   732→                
+   733→                {/* Active Card Container with Swipe-to-Match Drag UX */}
+   734→                <motion.div
+   735→                  drag="x"
+   736→                  dragConstraints={{ left: 0, right: 0 }}
+   737→                  dragElastic={0.8}
+   738→                  style={{ x, rotate, cursor: 'grab' }}
+   739→                  whileDrag={{ scale: 1.02 }}
+   740→                  onDragEnd={(event, info) => {
+   741→                    // If swiped right beyond 130px, register 'like' (Connect)
+   742→                    if (info.offset.x > 130) {
+   743→                      handleSwipe('like', currentCandidate._id);
+   744→                    } 
+   745→                    // If swiped left beyond -130px, register 'pass'
+   746→                    else if (info.offset.x < -130) {
+   747→                      handleSwipe('pass', currentCandidate._id);
+   748→                    }
+   749→                  }}
+   750→                  animate={
+   751→                    swiping === 'like'
+   752→                      ? { x: 500, opacity: 0, rotate: 30 }
+   753→                      : swiping === 'pass'
+   754→                      ? { x: -500, opacity: 0, rotate: -30 }
+   755→                      : { x: 0, opacity: 1, rotate: 0 }
+   756→                  }
+   757→                  transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+   758→                  className="relative w-full aspect-[3/4.2] rounded-3xl overflow-hidden bg-[#1F2937] border border-white/[0.08] shadow-[0_15px_35px_rgba(0,0,0,0.5)] hover:shadow-[0_0_30px_rgba(124,58,237,0.2)] flex flex-col touch-none select-none active:cursor-grabbing transition-shadow duration-300"
+   759→                >
+   760→                  {/* Inner card container with vertical scroll for details */}
+   761→                  <div className="flex-1 overflow-y-auto scrollbar-thin select-none pointer-events-auto flex flex-col bg-[#1F2937]">
+   762→                    {/* Image Area */}
+   763→                    <div className="relative aspect-[4/4.5] bg-slate-950 overflow-hidden shrink-0">
+   764→                      
+   765→                      {/* AMEN Stamp (Drag Right Indicator) */}
+   766→                      <motion.div
+   767→                        style={{ opacity: yesOpacity }}
+   768→                        className="absolute top-24 left-8 z-30 border-[3px] border-emerald-500 text-emerald-500 font-black text-xs uppercase tracking-[0.2em] px-3 py-1 rounded-xl rotate-[-12deg] bg-slate-950/90 shadow-md flex items-center gap-1.5 pointer-events-none"
+   769→                      >
+   770→                        <Heart size={12} fill="currentColor" />
+   771→                        <span>AMEN</span>
+   772→                      </motion.div>
+   773→
+   774→                      {/* PASS Stamp (Drag Left Indicator) */}
+   775→                      <motion.div
+   776→                        style={{ opacity: noOpacity }}
+   777→                        className="absolute top-24 right-8 z-30 border-[3px] border-rose-500 text-rose-500 font-black text-xs uppercase tracking-[0.2em] px-3 py-1 rounded-xl rotate-[12deg] bg-slate-950/90 shadow-md flex items-center gap-1.5 pointer-events-none"
+   778→                      >
+   779→                        <X size={12} strokeWidth={3} />
+   780→                        <span>PASS</span>
+   781→                      </motion.div>
+   782→
+   783→                      <img 
+   784→                        src={currentCandidate.profile_image} 
+   785→                        alt={currentCandidate.name} 
+   786→                        className="w-full h-full object-cover select-none pointer-events-none"
+   787→                      />
+   788→                      
+   789→                      {/* Gradient Overlay */}
+   790→                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-black/20 pointer-events-none" />
+   791→
+   792→                      {/* Quick Badges (Denomination, Age, Matrimony details) */}
+   793→                      <div className="absolute top-4 left-4 flex gap-1.5 flex-wrap z-10 max-w-[85%] pointer-events-none">
+   794→                        <span className="px-2 py-0.5 text-[9px] font-black tracking-wide uppercase rounded-md bg-[#7C3AED] text-white flex items-center gap-1 shadow-[0_2px_10px_rgba(124,58,237,0.4)]">
+   795→                          ⛪ {currentCandidate.denomination}
+   796→                        </span>
+   797→                        <span className="px-2 py-0.5 text-[9px] font-bold rounded-md bg-black/60 backdrop-blur-md text-[#F9FAFB] shadow-md border border-white/10">
+   798→                          {currentCandidate.age} y/o • {currentCandidate.gender?.charAt(0)}
+   799→                        </span>
+   800→                        {matchMode === 'matrimony' && (
+   801→                          <>
+   802→                            <span className="px-2 py-0.5 text-[9px] font-bold rounded-md bg-[#10B981] text-white shadow-md flex items-center gap-1">
+   803→                              💍 {currentCandidate.marital_status || 'Never Married'}
+   804→                            </span>
+   805→                            <span className="px-2 py-0.5 text-[9px] font-bold rounded-md bg-[#FB7185] text-white shadow-md flex items-center gap-1">
+   806→                              👨‍👩‍👧 {currentCandidate.family_values || 'Traditional'}
+   807→                            </span>
+   808→                          </>
+   809→                        )}
+   810→                      </div>
+   811→
+   812→                      {/* Author Verification & Compatibility Score Badge */}
+   813→                      <div className="absolute top-4 right-4 z-10 flex flex-col items-end gap-2 pointer-events-none">
+   814→                        {currentCandidate.is_verified && (
+   815→                          <span className="w-7 h-7 rounded-full bg-[#2563EB] flex items-center justify-center shadow-[0_2px_10px_rgba(37,99,235,0.4)] border border-white/20" title="Verified Member">
+   816→                            <ShieldCheck size={14} className="text-white" />
+   817→                          </span>
+   818→                        )}
+   819→
+   820→                        {currentCandidate.safe_intro_completed && (
+   821→                          <span className="h-7 px-2.5 rounded-full bg-[#10B981] flex items-center justify-center gap-1 shadow-[0_2px_10px_rgba(16,185,129,0.4)] border border-white/20 select-none" title="Completed Safe Intro Prayer Requirement">
+   822→                            <Check size={12} className="text-white font-extrabold stroke-[3.5px]" />
+   823→                            <span className="text-[9px] font-black tracking-wider text-white uppercase">Safe Intro</span>
+   824→                          </span>
+   825→                        )}
+   826→                        
+   827→                        <div 
+   828→                          data-testid={`match-score-${currentCandidate._id}`}
+   829→                          className={`px-3 py-1.5 rounded-2xl border flex items-center gap-1.5 shadow-lg backdrop-blur-md transition-all duration-300 ${
+   830→                            (aiMatchDetails?.match_score || currentCandidate.match_score || 85) >= 85
+   831→                              ? 'bg-[#7C3AED]/25 border-[#7C3AED]/40 text-white font-extrabold shadow-[0_4px_15px_rgba(124,58,237,0.2)]'
+   832→                              : 'bg-black/60 border-white/10 text-white font-bold'
+   833→                          }`}
+   834→                        >
+   835→                          <Sparkles size={11} className={(aiMatchDetails?.match_score || currentCandidate.match_score || 85) >= 85 ? "animate-pulse text-[#38BDF8]" : "text-[#94A3B8]"} />
+   836→                          <span className="text-[10px] tracking-wider uppercase font-black">{(aiMatchDetails?.match_score || currentCandidate.match_score || 85)}% Match</span>
+   837→                        </div>
+   838→                      </div>
+   839→
+   840→                      {/* Bottom overlay containing main text */}
+   841→                      <div className="absolute inset-x-0 bottom-0 p-5 pt-20 z-10 pointer-events-none">
+   842→                        <div className="flex items-center justify-between gap-2">
+   843→                          <div className="flex items-center gap-2 flex-wrap">
+   844→                            <h2 className="text-xl font-bold text-white flex items-baseline gap-1.5">
+   845→                              {currentCandidate.name}
+   846→                              <span className="text-xs font-normal text-[#94A3B8]">@{currentCandidate.username}</span>
+   847→                            </h2>
+   848→                            {/* Live Online Indicator */}
+   849→                            <span className="flex items-center gap-1 bg-[#10B981]/15 border border-[#10B981]/30 text-[#10B981] text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-widest select-none shadow-[0_0_10px_rgba(16,185,129,0.2)]">
+   850→                              <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse" />
+   851→                              Active
+   852→                            </span>
+   853→                          </div>
+   854→                          
+   855→                          {/* Trust & Safety: Report/Block Button */}
+   856→                          <button 
+   857→                            onClick={(e) => {
+   858→                              e.stopPropagation();
+   859→                              toast('Safety Center: Report or block functionality available in beta.', { icon: '🛡️' });
+   860→                            }}
+   861→                            className="w-8 h-8 rounded-full bg-black/40 border border-white/10 flex items-center justify-center text-[#94A3B8] hover:text-rose-400 hover:bg-black/60 transition-colors pointer-events-auto backdrop-blur-md"
+   862→                            title="Report or Block User"
+   863→                          >
+   864→                            <ShieldAlert size={14} />
+   865→                          </button>
+   866→                        </div>
+   867→
+   868→                        {/* Location and Distance */}
+   869→                        <p className="text-xs text-[#CBD5E1] mt-2 flex items-center gap-1.5 font-medium">
+   870→                          <MapPin size={12} className="text-[#38BDF8]" />
+   871→                          <span>{currentCandidate.city || 'Bengaluru'}, {currentCandidate.state || 'Karnataka'}</span>
+   872→                          <span className="text-[10px] text-[#475569] font-black">•</span>
+   873→                          <span className="text-[9px] uppercase tracking-wider text-[#38BDF8] font-bold bg-[#38BDF8]/10 px-1.5 py-0.5 rounded-md border border-[#38BDF8]/20">
+   874→                            {user?.city?.toLowerCase() === currentCandidate.city?.toLowerCase() ? 'Local • 2.4 km' : '15 km away'}
+   875→                          </span>
+   876→                        </p>
+   877→
+   878→                        {currentCandidate.home_church && (
+   879→                          <p className="text-xs text-[#7C3AED] font-bold flex items-center gap-1.5 mt-1.5">
+   880→                            <ChurchIcon size={12} />
+   881→                            {currentCandidate.home_church}
+   882→                          </p>
+   883→                        )}
+   884→                      </div>
+   885→                    </div>
+   886→
+   887→                    {/* Secondary details scroll area */}
+   888→                    <div className="bg-[#111827] p-5 space-y-4 flex-1">
+   889→                      {/* Bio text block */}
+   890→                      <div className="bg-[#0B1120]/80 p-3 rounded-2xl border border-white/[0.03] text-xs text-slate-200 leading-relaxed italic">
+   891→                        "{currentCandidate.bio}"
+   892→                      </div>
+   893→
+   894→                      {/* ✨ DYNAMIC AI MATCH EXPLANATION BOX */}
+   895→                      <div className="relative bg-gradient-to-r from-[#7C3AED]/5 to-[#2563EB]/5 rounded-2xl border border-[#7C3AED]/20 p-4 shadow-sm overflow-hidden">
+   896→                        <div className="absolute top-0 right-0 w-24 h-24 bg-[#7C3AED]/10 rounded-full blur-xl pointer-events-none" />
+   897→                        <div className="flex items-center gap-1.5 mb-2">
+   898→                          <Sparkles size={14} className="text-[#7C3AED] animate-pulse" />
+   899→                          <span className="text-[10px] font-black tracking-wider text-[#94A3B8] uppercase">AI Fellowship Alignment</span>
+   900→                        </div>
+   901→                        {loadingAiMatch ? (
+   902→                          <div className="space-y-2 py-1 animate-pulse">
+   903→                            <div className="h-3 bg-white/[0.04] rounded-full w-full" />
+   904→                            <div className="h-3 bg-white/[0.04] rounded-full w-[85%]" />
+   905→                          </div>
+   906→                        ) : aiMatchDetails ? (
+   907→                          <div className="space-y-3">
+   908→                            <p className="text-[11px] text-slate-200 leading-relaxed font-medium">
+   909→                              {aiMatchDetails.match_explanation}
+   910→                            </p>
+   911→                            <button
+   912→                              onClick={() => setShowDeepReport(true)}
+   913→                              className="px-3 py-1.5 bg-[#7C3AED]/15 hover:bg-[#7C3AED]/25 text-white border border-[#7C3AED]/30 text-[10px] font-extrabold rounded-lg uppercase tracking-wider flex items-center gap-1 transition-all shadow-[0_0_15px_rgba(124,58,237,0.1)] pointer-events-auto"
+   914→                            >
+   915→                              <Sparkles size={10} />
+   916→                              Deep Compatibility Report
+   917→                            </button>
+   918→                          </div>
+   919→                        ) : (
+   920→                          <p className="text-[11px] text-slate-300 leading-relaxed">
+   921→                            We think you'll connect because you both enjoy Bible study, worship, and are looking for real direct fellowship.
+   922→                          </p>
+   923→                        )}
+   924→                      </div>
+   925→
+   926→                      {/* Favorite Scripture block */}
+   927→                      {currentCandidate.favorite_verse && (
+   928→                        <div className="bg-[#1F2937] p-4 rounded-2xl border border-[#38BDF8]/20 shadow-sm relative overflow-hidden">
+   929→                          <div className="absolute top-0 right-0 text-[#111827] font-serif font-black text-6xl pointer-events-none opacity-50 select-none -mr-1 -mt-2">“</div>
+   930→                          <span className="text-[9px] uppercase tracking-wider font-black text-[#38BDF8] block mb-1">Favorite Scripture</span>
+   931→                          <p className="text-xs italic text-[#F9FAFB] leading-relaxed font-serif relative z-10 pr-4">
+   932→                            {currentCandidate.favorite_verse}
+   933→                          </p>
+   934→                        </div>
+   935→                      )}
+   936→
+   937→                      {/* Community Badges */}
+   938→                      {currentCandidate.badges && currentCandidate.badges.length > 0 && (
+   939→                        <div>
+   940→                          <span className="text-[9px] uppercase tracking-wider font-black text-slate-400 block mb-1">Community Trust Badges</span>
+   941→                          <CommunityBadges badges={currentCandidate.badges} />
+   942→                        </div>
+   943→                      )}
+   944→
+   945→                      {/* Mutual Interests */}
+   946→                      {(() => {
+   947→                        const commonInterests = currentCandidate.interests?.filter(i => user?.interests?.includes(i)) || [];
+   948→                        return (
+   949→                          <div className="space-y-1.5">
+   950→                            <span className="text-[9px] uppercase tracking-wider font-black text-slate-400 block">Interests & Hobbies</span>
+   951→                            <div className="flex flex-wrap gap-1.5">
+   952→                              {currentCandidate.interests?.map(interest => {
+   953→                                const isShared = user?.interests?.includes(interest);
+   954→                                return (
+   955→                                  <span 
+   956→                                    key={interest} 
+   957→                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all ${
+   958→                                      isShared
+   959→                                        ? 'bg-#38BDF8/15 border border-#38BDF8/30 text-#7DD3FC shadow-sm shadow-#38BDF8/5'
+   960→                                        : 'bg-white/[0.03] border border-white/[0.05] text-[#94A3B8]'
+   961→                                    }`}
+   962→                                  >
+   963→                                    {isShared && <Sparkles size={8} className="text-#38BDF8" />}
+   964→                                    #{interest.replace(/\s+/g, '')}
+   965→                                    {isShared && <span className="text-[8px] opacity-75 font-normal">(Shared)</span>}
+   966→                                  </span>
+   967→                                );
+   968→                              })}
+   969→                            </div>
+   970→                          </div>
+   971→                        );
+   972→                      })()}
+   973→
+   974→                      {/* Fellowship Goals / Expectations */}
+   975→                      <div className="pt-2 border-t border-white/[0.04]">
+   976→                        {matchMode === 'matrimony' ? (
+   977→                          currentCandidate.spouse_expectations && (
+   978→                            <div className="p-3 bg-purple-500/5 rounded-xl border border-purple-500/10 text-xs text-purple-300">
+   979→                              <span className="font-extrabold uppercase text-[9px] tracking-wider block text-purple-400 mb-1">Seeking Spouse Expectations</span>
+   980→                              "{currentCandidate.spouse_expectations}"
+   981→                            </div>
+   982→                          )
+   983→                        ) : (
+   984→                          currentCandidate.friendship_goals && (
+   985→                            <div className="p-3 bg-#38BDF8/5 rounded-xl border border-#38BDF8/10 text-xs text-#7DD3FC">
+   986→                              <span className="font-extrabold uppercase text-[9px] tracking-wider block text-#38BDF8 mb-1">Fellowship & Friendship Goals</span>
+   987→                              "{currentCandidate.friendship_goals}"
+   988→                            </div>
+   989→                          )
+   990→                        )}
+   991→                      </div>
+   992→                    </div>
+   993→                  </div>
+   994→                </motion.div>
+   995→
+   996→                {/* Keyboard guide & Action Swiper Buttons */}
+   997→                <div className="mt-5 flex flex-col items-center gap-4 pb-2">
+   998→                  <div className="flex items-center gap-6 justify-center">
+   999→                    {/* Pass Button */}
+  1000→                    <button
+  1001→                      onClick={() => handleSwipe('pass', currentCandidate._id)}
+  1002→                      disabled={!!swiping}
+  1003→                      className="w-16 h-16 rounded-full flex items-center justify-center bg-[#1F2937] border border-white/[0.08] text-rose-400 hover:text-rose-300 hover:bg-[#111827] hover:scale-105 active:scale-95 transition-all duration-300 shadow-[0_8px_20px_rgba(0,0,0,0.3)] hover:shadow-[0_0_20px_rgba(244,63,94,0.15)] hover:border-rose-500/30 group"
+  1004→                      title="Pass (Arrow Left)"
+  1005→                    >
+  1006→                      <X size={26} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform duration-300" />
+  1007→                    </button>
+  1008→
+  1009→                    {/* Edit BFF profile mid shortcut */}
+  1010→                    <button
+  1011→                      onClick={() => setIsEditingProfile(true)}
+  1012→                      className="w-12 h-12 rounded-full flex items-center justify-center bg-[#1F2937] border border-white/[0.05] text-[#94A3B8] hover:text-[#7C3AED] hover:border-[#7C3AED]/40 hover:bg-[#111827] hover:shadow-[0_0_15px_rgba(124,58,237,0.15)] transition-all duration-300"
+  1013→                      title="Edit My Profile"
+  1014→                    >
+  1015→                      <Sliders size={18} />
+  1016→                    </button>
+  1017→
+  1018→                    {/* Connect Button */}
+  1019→                    <button
+  1020→                      onClick={() => handleSwipe('like', currentCandidate._id)}
+  1021→                      disabled={!!swiping}
+  1022→                      className="w-16 h-16 rounded-full flex items-center justify-center bg-gradient-to-tr from-[#7C3AED] to-[#2563EB] text-white hover:scale-105 active:scale-95 transition-all duration-300 shadow-[0_8px_25px_rgba(124,58,237,0.35)] hover:shadow-[0_12px_35px_rgba(124,58,237,0.5)] group relative overflow-hidden border border-white/10"
+  1023→                      title="Connect (Arrow Right)"
+  1024→                    >
+  1025→                      {/* Ripple effect */}
+  1026→                      <span className="absolute inset-0 bg-white/20 rounded-full scale-0 group-hover:scale-100 transition-transform duration-500" />
+  1027→                      <Heart size={26} strokeWidth={2.5} fill="currentColor" className="group-hover:scale-110 transition-transform duration-300" />
+  1028→                    </button>
+  1029→                  </div>
+  1030→                  
+  1031→                  <span className="text-[10px] text-[#64748B] font-bold tracking-widest uppercase hidden md:inline-block">
+  1032→                    Tip: Use Left Arrow (Pass) & Right Arrow (Connect) keys!
+  1033→                  </span>
+  1034→                </div>
+  1035→
+  1036→              </div>
+  1037→            )}
+  1038→          </motion.div>
+  1039→        )}
+  1040→
+  1041→        {activeTab === 'compatible' && (
+  1042→          /* ════════════════ COMPATIBILITY MATCHES TAB ════════════════ */
+  1043→          <motion.div
+  1044→            key="compatible"
+  1045→            initial={{ opacity: 0, y: 10 }}
+  1046→            animate={{ opacity: 1, y: 0 }}
+  1047→            exit={{ opacity: 0, y: -10 }}
+  1048→            transition={{ duration: 0.25 }}
+  1049→            className="flex-1 flex flex-col gap-4"
+  1050→          >
+  1051→            {/* Explainer Hero card */}
+  1052→            <div className="bg-[#111827] border border-white/[0.08] p-6 rounded-3xl relative overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
+  1053→              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#7C3AED]/20 to-[#2563EB]/20 rounded-full blur-2xl -mr-8 -mt-8" />
+  1054→              <div className="flex items-start gap-4 relative z-10">
+  1055→                <div className="p-3 bg-gradient-to-br from-[#7C3AED]/15 to-[#2563EB]/15 rounded-2xl text-[#38BDF8] shrink-0 border border-[#7C3AED]/20">
+  1056→                  <Award size={20} />
+  1057→                </div>
+  1058→                <div>
+  1059→                  <h2 className="text-white font-black tracking-wide text-sm">Faith Compatibility Matcher</h2>
+  1060→                  <p className="text-xs text-[#94A3B8] mt-1.5 leading-relaxed">
+  1061→                    Our simple alignment algorithm identifies fellowship partners by matching overlapping spiritual interests, location proximity, denominational ties, and local churches.
+  1062→                  </p>
+  1063→                </div>
+  1064→              </div>
+  1065→
+  1066→              {/* My Profile Quick Stats */}
+  1067→              <div className="mt-5 pt-4 border-t border-white/[0.08] flex flex-wrap items-center justify-between gap-3">
+  1068→                <div className="text-[11px] text-[#64748B] font-bold flex items-center gap-1.5 bg-[#1F2937] px-2.5 py-1 rounded-xl">
+  1069→                  <MapPin size={11} className="text-[#38BDF8]" />
+  1070→                  <span>Loc: <strong className="text-[#F9FAFB]">{user?.city || 'Bengaluru'}, {user?.state || 'Karnataka'}</strong></span>
+  1071→                </div>
+  1072→                <div className="text-[11px] text-[#64748B] font-bold flex items-center gap-1.5 bg-[#1F2937] px-2.5 py-1 rounded-xl">
+  1073→                  <Church size={11} className="text-[#7C3AED]" />
+  1074→                  <span>Denom: <strong className="text-[#F9FAFB]">{user?.denomination || 'Non-denominational'}</strong></span>
+  1075→                </div>
+  1076→                <button
+  1077→                  onClick={() => setIsEditingProfile(true)}
+  1078→                  className="px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-[#94A3B8] hover:text-white rounded-xl text-[10px] font-bold transition-all flex items-center gap-1.5"
+  1079→                >
+  1080→                  <Sliders size={12} />
+  1081→                  Adjust Profile Tags
+  1082→                </button>
+  1083→              </div>
+  1084→            </div>
+  1085→
+  1086→            {/* List of Compatible Matches */}
+  1087→            {loadingCompatible ? (
+  1088→              <div className="flex flex-col items-center justify-center py-20 gap-3">
+  1089→                <RefreshCw size={24} className="text-[#7C3AED] animate-spin" />
+  1090→                <p className="text-xs text-[#94A3B8] font-bold">Running compatibility algorithms...</p>
+  1091→              </div>
+  1092→            ) : compatibleProfiles.length === 0 ? (
+  1093→              <div className="p-10 text-center bg-[#111827] rounded-3xl border border-white/[0.08] shadow-[0_8px_30px_rgba(0,0,0,0.4)] flex flex-col items-center justify-center">
+  1094→                <Smile size={36} className="text-[#38BDF8] mb-4 opacity-50" />
+  1095→                <p className="text-sm text-white font-black">Ready to find matches?</p>
+  1096→                <p className="text-xs text-[#94A3B8] max-w-xs mt-2 leading-relaxed">
+  1097→                  Adjust your profile preferences or interests to discover like-minded believers in your state or city.
+  1098→                </p>
+  1099→                <button
+  1100→                  onClick={() => setIsEditingProfile(true)}
+  1101→                  className="mt-5 px-5 py-2.5 bg-gradient-to-r from-[#7C3AED] to-[#2563EB] text-white font-bold rounded-xl text-xs shadow-[0_4px_15px_rgba(124,58,237,0.3)] hover:scale-105 transition-all"
+  1102→                >
+  1103→                  Configure My Interests
+  1104→                </button>
+  1105→              </div>
+  1106→            ) : (
+  1107→              <div className="space-y-4">
+  1108→                {compatibleProfiles.map((profile, idx) => {
+  1109→                  // Check connection status
+  1110→                  const isMutual = matches.some(m => m._id === profile._id);
+  1111→                  const hasLiked = getBffSwipedLikedIds().includes(profile._id);
+  1112→
+  1113→                  return (
+  1114→                    <motion.div
+  1115→                      key={profile._id}
+  1116→                      initial={{ opacity: 0, y: 15 }}
+  1117→                      animate={{ opacity: 1, y: 0 }}
+  1118→                      transition={{ delay: idx * 0.05 }}
+  1119→                      className="bg-[#111827] border border-white/[0.08] rounded-3xl p-5 hover:border-[#7C3AED]/30 hover:bg-[#1F2937] hover:shadow-[0_4px_20px_rgba(124,58,237,0.15)] transition-all flex flex-col gap-4 shadow-[0_8px_30px_rgba(0,0,0,0.3)] group relative"
+  1120→                    >
+  1121→                      {/* Top profile banner */}
+  1122→                      <div className="flex items-start justify-between gap-3">
+  1123→                        <div className="flex items-center gap-4">
+  1124→                          <div className={`w-14 h-14 rounded-2xl overflow-hidden shrink-0 border-2 bg-slate-950 shadow-inner ${
+  1125→                            profile.match_score >= 85 ? 'border-[#7C3AED]/40' : 'border-white/[0.08]'
+  1126→                          }`}>
+  1127→                            <img src={profile.profile_image} alt={profile.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+  1128→                          </div>
+  1129→                          <div>
+  1130→                            <div className="flex items-center gap-2 flex-wrap">
+  1131→                              <h3 className="text-sm font-black text-white leading-none">{profile.name}</h3>
+  1132→                              <span className="text-[10px] text-[#38BDF8] font-extrabold px-1.5 py-0.5 rounded-md bg-[#38BDF8]/10 leading-none border border-[#38BDF8]/20">{profile.age} · {profile.gender?.charAt(0)}</span>
+  1133→                              {profile.is_verified && <ShieldCheck size={14} className="text-[#2563EB] shrink-0 drop-shadow-[0_0_8px_rgba(37,99,235,0.5)]" />}
+  1134→                              {profile.safe_intro_completed && (
+  1135→                                <span className="flex items-center gap-1 text-[#10B981] font-extrabold text-[9px] uppercase tracking-wider bg-[#10B981]/10 border border-[#10B981]/20 px-2 py-0.5 rounded-md" title="Completed Safe Intro prayer requirement">
+  1136→                                  <Check size={10} className="stroke-[3]" />
+  1137→                                  <span>Safe Intro</span>
+  1138→                                </span>
+  1139→                              )}
+  1140→                            </div>
+  1141→                            <div className="text-[11px] text-[#94A3B8] flex items-center gap-1 mt-1.5 font-bold">
+  1142→                              <MapPin size={11} className="text-[#38BDF8]" />
+  1143→                              <span>{profile.city}, {profile.state}</span>
+  1144→                            </div>
+  1145→                            {matchMode === 'matrimony' && (
+  1146→                              <div className="flex flex-wrap gap-1 mt-2">
+  1147→                                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/20 rounded-md">
+  1148→                                  💍 {profile.marital_status || 'Never Married'}
+  1149→                                </span>
+  1150→                                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[#7C3AED]/10 text-[#7C3AED] border border-[#7C3AED]/20 rounded-md">
+  1151→                                  👨‍👩‍👧 {profile.family_values || 'Traditional'}
+  1152→                                </span>
+  1153→                                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[#38BDF8]/10 text-[#38BDF8] border border-[#38BDF8]/20 rounded-md">
+  1154→                                  ⏳ {profile.marriage_timeline || 'Within 1-2 years'}
+  1155→                                </span>
+  1156→                              </div>
+  1157→                            )}
+  1158→                          </div>
+  1159→                        </div>
+  1160→
+  1161→                        {/* Compatibility score ring/badge */}
+  1162→                        <div className="flex flex-col items-end">
+  1163→                          <div className={`px-2.5 py-1.5 rounded-2xl border flex items-center gap-1 shadow-sm ${
+  1164→                            profile.match_score >= 85 
+  1165→                              ? 'bg-[#7C3AED]/10 border-[#7C3AED]/30 text-[#7C3AED] font-extrabold shadow-[0_2px_10px_rgba(124,58,237,0.15)]' 
+  1166→                              : 'bg-white/[0.02] border-white/[0.06] text-[#94A3B8] font-bold'
+  1167→                          }`}>
+  1168→                            <Sparkles size={11} className={profile.match_score >= 85 ? "animate-pulse" : ""} />
+  1169→                            <span className="text-xs">{profile.match_score}% Match</span>
+  1170→                          </div>
+  1171→                        </div>
+  1172→                      </div>
+  1173→
+  1174→                      {/* Bio line */}
+  1175→                      <p className="text-xs text-[#94A3B8] line-clamp-2 italic leading-relaxed pl-2 border-l-2 border-[#38BDF8]/40">
+  1176→                        "{profile.bio}"
+  1177→                      </p>
+  1178→
+  1179→                      {/* Community Badges */}
+  1180→                      {profile.badges && profile.badges.length > 0 && (
+  1181→                        <div className="mt-1">
+  1182→                          <span className="text-[9px] uppercase tracking-wider font-black text-[#475569] block mb-1">Community Trust Badges</span>
+  1183→                          <CommunityBadges badges={profile.badges} />
+  1184→                        </div>
+  1185→                      )}
+  1186→
+  1187→                      {/* Matching breakdown reasons list */}
+  1188→                      <div className="bg-[#1F2937] p-3.5 rounded-2xl border border-white/[0.05] flex flex-col gap-2.5 shadow-[inset_0_2px_10px_rgba(0,0,0,0.2)]">
+  1189→                        <span className="text-[10px] text-[#64748B] font-bold uppercase tracking-wider block">Alignment Breakdown:</span>
+  1190→                        
+  1191→                        {profile.match_reasons.map((reason, rIdx) => {
+  1192→                          const getReasonIcon = (type) => {
+  1193→                            switch (type) {
+  1194→                              case 'interests': return <Users size={12} className="text-[#38BDF8]" />;
+  1195→                              case 'location': return <MapPin size={12} className="text-[#10B981]" />;
+  1196→                              case 'denomination': return <Church size={12} className="text-[#7C3AED]" />;
+  1197→                              case 'church': return <Compass size={12} className="text-[#FB7185]" />;
+  1198→                              case 'gender': return <Heart size={12} fill="currentColor" className="text-[#10B981]" />;
+  1199→                              case 'values': return <Compass size={12} className="text-[#7C3AED]" />;
+  1200→                              case 'timeline': return <Sparkles size={12} className="text-[#2563EB]" />;
+  1201→                              default: return <Sparkles size={12} className="text-[#FBBF24]" />;
+  1202→                            }
+  1203→                          };
+  1204→
+  1205→                          return (
+  1206→                            <div key={rIdx} className="flex items-start gap-2 text-xs">
+  1207→                              <div className="p-1.5 bg-[#111827] border border-white/[0.05] rounded-lg shrink-0 mt-0.5">
+  1208→                                {getReasonIcon(reason.type)}
+  1209→                              </div>
+  1210→                              <div>
+  1211→                                <span className="font-bold text-[#F9FAFB] text-[11px] leading-tight block">{reason.label}</span>
+  1212→                                <span className="text-[10px] text-[#94A3B8] leading-none block mt-0.5">{reason.details} (+{reason.points} pts)</span>
+  1213→                              </div>
+  1214→                            </div>
+  1215→                          );
+  1216→                        })}
+  1217→                      </div>
+  1218→
+  1219→                      {/* Favorite verse preview if present */}
+  1220→                      {profile.favorite_verse && (
+  1221→                        <div className="text-[10px] text-[#94A3B8] flex items-center gap-1.5 italic bg-[#1F2937] p-2.5 rounded-xl border border-white/[0.05]">
+  1222→                          <BookOpen size={10} className="shrink-0 text-[#38BDF8]" />
+  1223→                          <span className="truncate">Fav Verse: {profile.favorite_verse}</span>
+  1224→                        </div>
+  1225→                      )}
+  1226→
+  1227→                      {/* Action buttons */}
+  1228→                      <div className="flex items-center gap-3 mt-1">
+  1229→                        <button
+  1230→                          onClick={() => navigate(`/app/profile/${profile._id}`)}
+  1231→                          className="flex-1 py-2.5 bg-[#1F2937] hover:bg-[#374151] border border-white/[0.08] text-[#CBD5E1] hover:text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.15)]"
+  1232→                        >
+  1233→                          View Profile
+  1234→                        </button>
+  1235→                        
+  1236→                        {isMutual ? (
+  1237→                          <button
+  1238→                            onClick={() => handleStartChat(profile._id, profile.name)}
+  1239→                            className="flex-1 py-2.5 bg-[#7C3AED]/15 border border-[#7C3AED]/30 text-[#7C3AED] hover:bg-[#7C3AED]/25 hover:shadow-[0_4px_15px_rgba(124,58,237,0.2)] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+  1240→                          >
+  1241→                            <MessageSquare size={13} />
+  1242→                            Chat Now
+  1243→                          </button>
+  1244→                        ) : hasLiked ? (
+  1245→                          <button
+  1246→                            disabled
+  1247→                            className="flex-1 py-2.5 bg-[#10B981]/10 border border-[#10B981]/20 text-[#10B981] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-inner opacity-70"
+  1248→                          >
+  1249→                            <Check size={13} />
+  1250→                            Requested
+  1251→                          </button>
+  1252→                        ) : (
+  1253→                          <button
+  1254→                            onClick={() => handleCompatibleConnect(profile._id, profile.name)}
+  1255→                            className="flex-1 py-2.5 bg-gradient-to-r from-[#7C3AED] to-[#2563EB] text-white hover:scale-[1.02] active:scale-[0.98] font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-[0_4px_15px_rgba(124,58,237,0.3)] hover:shadow-[0_6px_20px_rgba(124,58,237,0.4)]"
+  1256→                          >
+  1257→                            <Heart size={13} fill="currentColor" />
+  1258→                            Connect BFF
+  1259→
+  1260→                          </button>
+  1261→                        )}
+  1262→                      </div>
+  1263→                    </motion.div>
+  1264→                  );
+  1265→                })}
+  1266→              </div>
+  1267→            )}
+  1268→          </motion.div>
+  1269→        )}
+  1270→
+  1271→        {activeTab === 'connections' && (
+  1272→          /* ════════════════ CONNECTIONS TAB ════════════════ */
+  1273→          <motion.div
+  1274→            key="connections"
+  1275→            initial={{ opacity: 0, y: 10 }}
+  1276→            animate={{ opacity: 1, y: 0 }}
+  1277→            exit={{ opacity: 0, y: -10 }}
+  1278→            transition={{ duration: 0.25 }}
+  1279→            className="flex-1"
+  1280→          >
+  1281→            {loadingConns ? (
+  1282→              <div className="flex justify-center py-20">
+  1283→                <RefreshCw className="animate-spin text-#38BDF8" size={24} />
+  1284→              </div>
+  1285→            ) : (
+  1286→              <div className="space-y-6">
+  1287→                
+  1288→                {/* ── WHO LIKED ME (SWIPE DIRECTLY TO CONNECT) ── */}
+  1289→                <div>
+  1290→                  <h3 className="text-white font-black text-xs uppercase tracking-widest mb-3 flex items-center gap-2 text-[#FB7185]">
+  1291→                    <Star size={14} fill="currentColor" />
+  1292→                    Who Liked Me ({whoLikedMe.length})
+  1293→                  </h3>
+  1294→                  
+  1295→                  {whoLikedMe.length === 0 ? (
+  1296→                    <div className="p-6 text-center bg-[#111827] rounded-3xl border border-white/[0.08] shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
+  1297→                      <p className="text-[#94A3B8] text-xs font-medium">
+  1298→                        No pending friend requests. Keep swiping and matching!
+  1299→                      </p>
+  1300→                    </div>
+  1301→                  ) : (
+  1302→                    <div className="grid grid-cols-2 gap-3">
+  1303→                      {whoLikedMe.map(likedUser => (
+  1304→                        <div 
+  1305→                          key={likedUser._id}
+  1306→                          className="bg-[#111827] border border-white/[0.08] p-4 rounded-3xl flex flex-col items-center text-center relative group shadow-[0_4px_15px_rgba(0,0,0,0.2)] hover:shadow-[0_8px_25px_rgba(251,113,133,0.15)] transition-all duration-300 hover:border-[#FB7185]/30"
+  1307→                        >
+  1308→                          <div className="w-16 h-16 rounded-2xl overflow-hidden mb-3 border-2 border-[#FB7185]/40 shadow-inner">
+  1309→                            <img src={likedUser.profile_image} alt={likedUser.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+  1310→                          </div>
+  1311→                          <span className="text-xs font-black text-white block w-full flex items-center justify-center gap-1.5 flex-wrap">
+  1312→                            {likedUser.name}
+  1313→                            {likedUser.safe_intro_completed && (
+  1314→                              <Check size={12} className="text-[#10B981] stroke-[3.5] shrink-0" title="Completed Safe Intro" />
+  1315→                            )}
+  1316→                          </span>
+  1317→                          <span className="text-[10px] text-[#94A3B8] font-bold mt-0.5">{likedUser.denomination}</span>
+  1318→                          
+  1319→                          {likedUser.badges && likedUser.badges.length > 0 && (
+  1320→                            <div className="mt-1.5 flex justify-center scale-95 origin-top">
+  1321→                              <CommunityBadges badges={likedUser.badges} limit={1} />
+  1322→                            </div>
+  1323→                          )}
+  1324→                          
+  1325→                          {/* Match back button */}
+  1326→                          <button
+  1327→                            onClick={() => handleSwipe('like', likedUser._id)}
+  1328→                            className="mt-4 w-full py-2 bg-[#FB7185]/15 border border-[#FB7185]/30 hover:bg-[#FB7185]/25 text-[#FB7185] font-black rounded-xl text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-sm"
+  1329→                          >
+  1330→                            <Check size={12} strokeWidth={3} />
+  1331→                            Connect Back
+  1332→                          </button>
+  1333→                        </div>
+  1334→                      ))}
+  1335→                    </div>
+  1336→                  )}
+  1337→                </div>
+  1338→
+  1339→                {/* ── MUTUAL MATCHES (CONVERT INTO DMs) ── */}
+  1340→                <div className="mt-8">
+  1341→                  <h3 className="text-white font-black text-xs uppercase tracking-widest mb-3 flex items-center gap-2 text-[#7C3AED]">
+  1342→                    <Users size={14} />
+  1343→                    My Mutual Matches ({matches.length})
+  1344→                  </h3>
+  1345→
+  1346→                  {matches.length === 0 ? (
+  1347→                    <div className="p-8 text-center bg-[#111827] rounded-3xl border border-white/[0.08] flex flex-col items-center shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
+  1348→                      <p className="text-[#94A3B8] text-sm max-w-xs leading-relaxed font-medium">
+  1349→                        No active connections yet. Swiping right on people with mutual interests is the best way to grow!
+  1350→                      </p>
+  1351→                      <button
+  1352→                        onClick={() => { setActiveTab('discover'); navigate('/app/feed?tab=discover', { replace: true }); }}
+  1353→                        className="mt-5 px-5 py-2 bg-gradient-to-r from-[#7C3AED] to-[#2563EB] text-white rounded-xl text-xs font-bold transition-all hover:scale-[1.02] shadow-[0_4px_15px_rgba(124,58,237,0.3)]"
+  1354→                      >
+  1355→                        Start Finding Friends
+  1356→                      </button>
+  1357→                    </div>
+  1358→                  ) : (
+  1359→                    <div className="space-y-3">
+  1360→                      {matches.map(match => (
+  1361→                        <div 
+  1362→                          key={match._id}
+  1363→                          className="bg-[#111827] border border-white/[0.08] p-4 rounded-3xl flex items-center justify-between gap-3 hover:bg-[#1F2937] transition-colors shadow-[0_4px_15px_rgba(0,0,0,0.2)] hover:shadow-[0_8px_25px_rgba(124,58,237,0.15)] group"
+  1364→                        >
+  1365→                          <div className="flex items-center gap-3">
+  1366→                            <div className="w-12 h-12 rounded-2xl overflow-hidden shrink-0 bg-slate-950 border border-white/[0.08]">
+  1367→                              <img src={match.profile_image} alt={match.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+  1368→                            </div>
+  1369→                            <div>
+  1370→                              <div className="flex items-center gap-1.5 flex-wrap">
+  1371→                                <span className="text-xs font-black text-white">{match.name}</span>
+  1372→                                {match.is_verified && <ShieldCheck size={14} className="text-[#2563EB]" />}
+  1373→                                {match.safe_intro_completed && (
+  1374→                                  <span className="flex items-center gap-1 text-[#10B981] font-extrabold text-[8px] uppercase tracking-wider bg-[#10B981]/10 border border-[#10B981]/20 px-1.5 py-0.5 rounded-md" title="Completed Safe Intro prayer requirement">
+  1375→                                    <Check size={10} className="stroke-[3]" />
+  1376→                                    <span>Safe Intro</span>
+  1377→                                  </span>
+  1378→                                )}
+  1379→                              </div>
+  1380→                              <p className="text-[10px] text-[#94A3B8] line-clamp-1 mt-0.5 font-medium">"{match.bio || 'Connected BFF'}"</p>
+  1381→                              {match.badges && match.badges.length > 0 && (
+  1382→                                <div className="mt-1.5">
+  1383→                                  <CommunityBadges badges={match.badges} limit={2} />
+  1384→                                </div>
+  1385→                              )}
+  1386→                            </div>
+  1387→                          </div>
+  1388→
+  1389→                          <button
+  1390→                            onClick={() => handleStartChat(match._id, match.name)}
+  1391→                            className="p-3 bg-[#7C3AED]/15 hover:bg-[#7C3AED]/25 border border-[#7C3AED]/30 rounded-xl text-[#7C3AED] transition-colors shadow-sm"
+  1392→                            title="Message Candidate"
+  1393→                          >
+  1394→                            <MessageSquare size={16} strokeWidth={2.5} />
+  1395→                          </button>
+  1396→                        </div>
+  1397→                      ))}
+  1398→                    </div>
+  1399→                  )}
+  1400→                </div>
+  1401→
+  1402→              </div>
+  1403→            )}
+  1404→          </motion.div>
+  1405→        )}
+  1406→      </AnimatePresence>
+  1407→
+  1408→      {/* ── DEEP AI COMPATIBILITY REPORT MODAL ── */}
+  1409→      <AnimatePresence>
+  1410→        {showDeepReport && aiMatchDetails && candidates && candidates[currentIndex] && (
+  1411→          <motion.div 
+  1412→            initial={{ opacity: 0 }}
+  1413→            animate={{ opacity: 1 }}
+  1414→            exit={{ opacity: 0 }}
+  1415→            className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-50 flex items-center justify-center p-4 overflow-y-auto"
+  1416→          >
+  1417→            <motion.div 
+  1418→              initial={{ scale: 0.95, y: 15 }}
+  1419→              animate={{ scale: 1, y: 0 }}
+  1420→              exit={{ scale: 0.95, y: 15 }}
+  1421→              className="bg-[#1E293B] border border-white/[0.08] max-w-md w-full rounded-3xl p-6 shadow-2xl relative flex flex-col my-8 pointer-events-auto"
+  1422→            >
+  1423→              <div className="absolute top-4 right-4 z-10">
+  1424→                <button 
+  1425→                  onClick={() => setShowDeepReport(false)}
+  1426→                  className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-white flex items-center justify-center transition-colors pointer-events-auto"
+  1427→                >
+  1428→                  <X size={14} />
+  1429→                </button>
+  1430→              </div>
+  1431→
+  1432→              {/* Header */}
+  1433→              <div className="flex items-center gap-3 mb-4 border-b border-white/[0.06] pb-4">
+  1434→                <div className="w-11 h-11 rounded-2xl bg-#38BDF8/10 flex items-center justify-center text-#38BDF8 shrink-0">
+  1435→                  <Sparkles size={22} className="animate-pulse" />
+  1436→                </div>
+  1437→                <div>
+  1438→                  <h3 className="text-sm font-black text-white flex items-center gap-1.5 leading-none">
+  1439→                    AI Match Compatibility
+  1440→                    <span className="text-[8px] uppercase tracking-wider font-black bg-#38BDF8 text-slate-950 px-1.5 py-0.5 rounded">Gemini</span>
+  1441→                  </h3>
+  1442→                  <p className="text-[10px] text-slate-400 mt-1">Deep alignment report for you & {candidates[currentIndex].name}</p>
+  1443→                </div>
+  1444→              </div>
+  1445→
+  1446→              {/* Score and Quick Bio */}
+  1447→              <div className="grid grid-cols-3 gap-3 mb-4">
+  1448→                <div className="col-span-1 bg-slate-900/60 p-2.5 rounded-2xl border border-white/[0.04] text-center flex flex-col justify-center">
+  1449→                  <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Alignment</span>
+  1450→                  <span className="text-xl font-black text-#7DD3FC mt-0.5">{aiMatchDetails.match_score || 85}%</span>
+  1451→                </div>
+  1452→                <div className="col-span-2 bg-slate-900/60 p-2.5 rounded-2xl border border-white/[0.04] flex flex-col justify-center">
+  1453→                  <p className="text-xs font-bold text-white leading-tight">{candidates[currentIndex].name}</p>
+  1454→                  <p className="text-[10px] text-#38BDF8 font-semibold mt-0.5">⛪ {candidates[currentIndex].home_church || candidates[currentIndex].denomination}</p>
+  1455→                </div>
+  1456→              </div>
+  1457→
+  1458→              {/* Scrollable details */}
+  1459→              <div className="space-y-4 max-h-[260px] overflow-y-auto pr-1 scrollbar-thin mb-4">
+  1460→                <div className="space-y-1">
+  1461→                  <span className="text-[9px] font-black uppercase tracking-wider text-#38BDF8">Fellowship Compatibility</span>
+  1462→                  <p className="text-xs text-slate-200 leading-relaxed bg-slate-900/40 p-3 rounded-xl border border-white/[0.02]">
+  1463→                    {aiMatchDetails.compatibility_summary || "We think you'll connect because you both are passionate about community service and active participation in local church events."}
+  1464→                  </p>
+  1465→                </div>
+  1466→
+  1467→                {/* Suggested Conversation Starters */}
+  1468→                {aiMatchDetails.conversation_starters && aiMatchDetails.conversation_starters.length > 0 && (
+  1469→                  <div className="space-y-1.5">
+  1470→                    <span className="text-[9px] font-black uppercase tracking-wider text-#38BDF8">Suggested Conversation Starters</span>
+  1471→                    <div className="space-y-1.5">
+  1472→                      {aiMatchDetails.conversation_starters.map((starter, index) => (
+  1473→                        <div 
+  1474→                          key={index} 
+  1475→                          onClick={() => {
+  1476→                            setIcebreakerText(starter);
+  1477→                            setShowDeepReport(false);
+  1478→                            toast.info("Conversation starter loaded into connector! 🙏");
+  1479→                          }}
+  1480→                          className="text-[11px] text-slate-300 bg-white/[0.02] border border-white/[0.04] p-2.5 rounded-xl hover:bg-#38BDF8/5 hover:border-#38BDF8/20 hover:text-white transition-all cursor-pointer flex items-start gap-2 group pointer-events-auto"
+  1481→                        >
+  1482→                          <span className="w-4 h-4 rounded-full bg-#38BDF8/10 text-#38BDF8 text-[9px] font-black flex items-center justify-center shrink-0 group-hover:bg-#38BDF8 group-hover:text-slate-950 transition-colors">
+  1483→                            {index + 1}
+  1484→                          </span>
+  1485→                          <p className="leading-normal flex-1">{starter}</p>
+  1486→                        </div>
+  1487→                      ))}
+  1488→                    </div>
+  1489→                  </div>
+  1490→                )}
+  1491→
+  1492→                {/* Shared Devotional Scripture */}
+  1493→                {aiMatchDetails.shared_scripture && (
+  1494→                  <div className="space-y-1 bg-#38BDF8/5 p-3 rounded-xl border border-#38BDF8/10">
+  1495→                    <span className="text-[9px] uppercase tracking-widest font-black text-#7DD3FC block">Encouraged Scripture for Fellowship</span>
+  1496→                    <p className="text-xs italic text-slate-200 font-serif leading-relaxed mt-1">
+  1497→                      "{aiMatchDetails.shared_scripture_text || 'Iron sharpens iron, and one man sharpens another.'}"
+  1498→                    </p>
+  1499→                    <span className="text-[9px] font-bold text-#38BDF8 block mt-1.5 text-right">— {aiMatchDetails.shared_scripture}</span>
+  1500→                  </div>
+  1501→                )}
+  1502→              </div>
+  1503→
+  1504→              {/* Action */}
+  1505→              <button
+  1506→                onClick={() => {
+  1507→                  setShowDeepReport(false);
+  1508→                  handleSwipe('like', candidates[currentIndex]._id);
+  1509→                }}
+  1510→                className="w-full py-2.5 bg-#38BDF8 hover:bg-#0284C7 text-slate-950 font-black rounded-xl text-xs uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-1.5 pointer-events-auto"
+  1511→              >
+  1512→                <Heart size={14} fill="currentColor" />
+  1513→                Connect in Fellowship
+  1514→              </button>
+  1515→            </motion.div>
+  1516→          </motion.div>
+  1517→        )}
+  1518→      </AnimatePresence>
+  1519→
+  1520→      {/* ── MUTUAL CONNECTION CELEBRATION MODAL ── */}
+  1521→      <AnimatePresence>
+  1522→        {matchCelebration && (
+  1523→          <motion.div 
+  1524→            initial={{ opacity: 0 }}
+  1525→            animate={{ opacity: 1 }}
+  1526→            exit={{ opacity: 0 }}
+  1527→            className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-50 flex items-center justify-center p-4 pointer-events-auto"
+  1528→          >
+  1529→            <motion.div 
+  1530→              initial={{ scale: 0.9, y: 20 }}
+  1531→              animate={{ scale: 1, y: 0 }}
+  1532→              exit={{ scale: 0.9, y: 20 }}
+  1533→              className="bg-[#1E293B] border border-white/[0.08] max-w-sm w-full rounded-3xl p-6 text-center shadow-2xl relative"
+  1534→            >
+  1535→              <div className="absolute top-4 right-4">
+  1536→                <button 
+  1537→                  onClick={() => setMatchCelebration(null)}
+  1538→                  className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-white flex items-center justify-center transition-colors pointer-events-auto"
+  1539→                >
+  1540→                  <X size={14} />
+  1541→                </button>
+  1542→              </div>
+  1543→
+  1544→              <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-bounce">
+  1545→                <Sparkles size={24} className="animate-pulse text-#38BDF8" />
+  1546→              </div>
+  1547→
+  1548→              <h2 className="text-lg font-black text-white mb-1">It's a Connection! 🎉</h2>
+  1549→              <p className="text-xs text-#7DD3FC font-medium mb-4">
+  1550→                🎉 God may have just introduced you to a new friend.
+  1551→              </p>
+  1552→
+  1553→              {/* Connected Avatars */}
+  1554→              <div className="flex items-center justify-center gap-4 mb-5">
+  1555→                <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-#38BDF8 bg-slate-950 shadow-lg shrink-0">
+  1556→                  <img src={user?.profile_image || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80'} alt="Me" className="w-full h-full object-cover" />
+  1557→                </div>
+  1558→                <div className="w-7 h-7 bg-#38BDF8 rounded-full flex items-center justify-center text-slate-950 font-black shadow-md z-10 -mx-6">
+  1559→                  <Heart size={14} fill="currentColor" />
+  1560→                </div>
+  1561→                <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-#38BDF8 bg-slate-950 shadow-lg shrink-0">
+  1562→                  <img src={matchCelebration.other_user?.profile_image} alt="BFF Match" className="w-full h-full object-cover" />
+  1563→                </div>
+  1564→              </div>
+  1565→
+  1566→              {/* Mutual Interests Display */}
+  1567→              {(() => {
+  1568→                const partnerInterests = matchCelebration.other_user?.interests || [];
+  1569→                const commonInterests = partnerInterests.filter(i => user?.interests?.includes(i));
+  1570→                if (commonInterests.length > 0) {
+  1571→                  return (
+  1572→                    <div className="mb-4 text-left bg-slate-900/50 p-2.5 rounded-xl border border-white/[0.03]">
+  1573→                      <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block mb-1">Shared Faith & Interests</span>
+  1574→                      <div className="flex flex-wrap gap-1">
+  1575→                        {commonInterests.slice(0, 3).map(interest => (
+  1576→                          <span key={interest} className="px-2 py-0.5 rounded bg-#38BDF8/10 text-#7DD3FC text-[9px] font-bold">
+  1577→                            #{interest}
+  1578→                          </span>
+  1579→                        ))}
+  1580→                      </div>
+  1581→                    </div>
+  1582→                  );
+  1583→                }
+  1584→                return null;
+  1585→              })()}
+  1586→
+  1587→              {/* Instant message input */}
+  1588→              <div className="bg-slate-900 p-3.5 rounded-2xl border border-white/[0.06] mb-5">
+  1589→                <label className="block text-[10px] text-[#64748B] font-bold uppercase mb-1.5 text-left">Suggested Connection Icebreaker</label>
+  1590→                <textarea
+  1591→                  rows={2}
+  1592→                  value={icebreakerText}
+  1593→                  onChange={(e) => setIcebreakerText(e.target.value)}
+  1594→                  className="w-full bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none resize-none leading-relaxed pointer-events-auto"
+  1595→                  placeholder="Type a friendly hello..."
+  1596→                />
+  1597→              </div>
+  1598→
+  1599→              <div className="space-y-2">
+  1600→                <button
+  1601→                  onClick={sendMatchIcebreaker}
+  1602→                  disabled={sendingIcebreaker}
+  1603→                  className="w-full py-2.5 bg-#38BDF8 hover:bg-#0284C7 disabled:bg-[#475569] text-slate-900 font-extrabold rounded-2xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition-all pointer-events-auto"
+  1604→                >
+  1605→                  <Send size={12} />
+  1606→                  Send & Chat Now
+  1607→                </button>
+  1608→                <button
+  1609→                  onClick={() => setMatchCelebration(null)}
+  1610→                  className="w-full py-2.5 bg-white/[0.04] hover:bg-white/[0.08] text-white font-bold rounded-2xl text-xs uppercase tracking-wider transition-all pointer-events-auto"
+  1611→                >
+  1612→                  Keep Swiping
+  1613→                </button>
+  1614→              </div>
+  1615→
+  1616→            </motion.div>
+  1617→          </motion.div>
+  1618→        )}
+  1619→      </AnimatePresence>
+  1620→
+  1621→      {/* ── SAFE INTRO MODAL ── */}
+  1622→      <AnimatePresence>
+  1623→        {safeIntroModal && (
+  1624→          <motion.div 
+  1625→            initial={{ opacity: 0 }}
+  1626→            animate={{ opacity: 1 }}
+  1627→            exit={{ opacity: 0 }}
+  1628→            className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-4"
+  1629→          >
+  1630→            <motion.div 
+  1631→              initial={{ scale: 0.9, y: 20 }}
+  1632→              animate={{ scale: 1, y: 0 }}
+  1633→              exit={{ scale: 0.9, y: 20 }}
+  1634→              className="bg-[#1E293B] border border-white/[0.08] max-w-sm w-full rounded-3xl p-6 shadow-2xl relative flex flex-col text-left"
+  1635→            >
+  1636→              <div className="absolute top-4 right-4">
+  1637→                <button 
+  1638→                  onClick={() => setSafeIntroModal(null)}
+  1639→                  className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-white flex items-center justify-center transition-colors"
+  1640→                >
+  1641→                  <X size={14} />
+  1642→                </button>
+  1643→              </div>
+  1644→
+  1645→              <div className="w-12 h-12 bg-#38BDF8/15 rounded-2xl flex items-center justify-center mb-4 text-#38BDF8">
+  1646→                <ShieldCheck size={24} />
+  1647→              </div>
+  1648→
+  1649→              <h2 className="text-lg font-extrabold text-white mb-1.5 flex items-center gap-1.5">
+  1650→                🕊️ Safe Intro Required
+  1651→              </h2>
+  1652→              <p className="text-[11px] text-[#94A3B8] leading-relaxed mb-4">
+  1653→                To keep our matrimonial search respectful and focused on lifelong, God-honoring companionship, please select a faith-centered prompt or submit a prayer request to unlock your chat with <span className="text-#38BDF8 font-bold">{safeIntroModal.name}</span>.
+  1654→              </p>
+  1655→
+  1656→              {/* Prompt Selection */}
+  1657→              <div className="space-y-3.5 mb-4">
+  1658→                <div>
+  1659→                  <label className="block text-[10px] text-[#64748B] font-bold uppercase tracking-wider mb-1.5">
+  1660→                    Select a faith-first prompt:
+  1661→                  </label>
+  1662→                  <select
+  1663→                    value={safeIntroPrompt}
+  1664→                    onChange={(e) => setSafeIntroPrompt(e.target.value)}
+  1665→                    className="w-full bg-slate-900 border border-white/[0.06] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-#38BDF8"
+  1666→                  >
+  1667→                    <option value="How can I lift you up in prayer this week? 🙏">"How can I lift you up in prayer this week? 🙏"</option>
+  1668→                    <option value="What is your testimony or favorite way to serve the community? ⛪">"What is your testimony or favorite way to serve the community? ⛪"</option>
+  1669→                    <option value="What does building a Christ-centered household look like to you? 💍">"What does building a Christ-centered household look like to you? 💍"</option>
+  1670→                    <option value="How has God been showing His faithfulness in your life lately? ✨">"How has God been showing His faithfulness in your life lately? ✨"</option>
+  1671→                    <option value="Custom Prayer Request / Inquiry 📝">"Custom Prayer Request / Inquiry 📝"</option>
+  1672→                  </select>
+  1673→                </div>
+  1674→
+  1675→                <div>
+  1676→                  <label className="block text-[10px] text-[#64748B] font-bold uppercase tracking-wider mb-1.5">
+  1677→                    Your Response or Prayer Request:
+  1678→                  </label>
+  1679→                  <textarea
+  1680→                    rows={4}
+  1681→                    value={safeIntroAnswer}
+  1682→                    onChange={(e) => setSafeIntroAnswer(e.target.value)}
+  1683→                    className="w-full bg-slate-900 border border-white/[0.06] rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-#38BDF8 resize-none leading-relaxed"
+  1684→                    placeholder="e.g. I would love for us to pray about direction for my career transition, and how I can serve more at my local church..."
+  1685→                  />
+  1686→                  <div className="flex justify-between items-center mt-1">
+  1687→                    <span className="text-[9px] text-[#64748B]">
+  1688→                      {safeIntroAnswer.trim().length >= 15 ? (
+  1689→                        <span className="text-emerald-400 font-semibold">Min length met (at least 15 chars)</span>
+  1690→                      ) : (
+  1691→                        <span>Needs {15 - safeIntroAnswer.trim().length} more characters</span>
+  1692→                      )}
+  1693→                    </span>
+  1694→                    <span className="text-[9px] text-[#64748B]">{safeIntroAnswer.trim().length} chars</span>
+  1695→                  </div>
+  1696→                </div>
+  1697→              </div>
+  1698→
+  1699→              <div className="space-y-2">
+  1700→                <button
+  1701→                  onClick={submitSafeIntro}
+  1702→                  disabled={sendingSafeIntro || safeIntroAnswer.trim().length < 15}
+  1703→                  className="w-full py-3 bg-#38BDF8 hover:bg-#0284C7 disabled:bg-slate-800 disabled:text-[#64748B] disabled:cursor-not-allowed text-slate-900 font-bold rounded-2xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition-all"
+  1704→                >
+  1705→                  {sendingSafeIntro ? (
+  1706→                    <RefreshCw className="animate-spin" size={12} />
+  1707→                  ) : (
+  1708→                    <Send size={12} />
+  1709→                  )}
+  1710→                  Share Intro & Unlock Chat
+  1711→                </button>
+  1712→                <button
+  1713→                  onClick={() => setSafeIntroModal(null)}
+  1714→                  className="w-full py-2.5 bg-white/[0.04] hover:bg-white/[0.08] text-[#94A3B8] hover:text-white font-semibold rounded-2xl text-xs uppercase tracking-wider transition-all text-center"
+  1715→                >
+  1716→                  Cancel
+  1717→                </button>
+  1718→              </div>
+  1719→            </motion.div>
+  1720→          </motion.div>
+  1721→        )}
+  1722→      </AnimatePresence>
+  1723→    </div>
+  1724→  );
+  1725→}
+  1726→
