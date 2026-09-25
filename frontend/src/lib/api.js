@@ -281,15 +281,23 @@ api.interceptors.response.use(
     if (category === 'auth') {
       if (IS_DEV) {
         console.warn(
-          `[API] 401 Unauthorized — clearing stale Supabase session (request ${config?._requestId})`
+          `[API] 401 Unauthorized — request ${config?._requestId}`
         );
       }
+      // Only force-signout if user appears to have a stale session
+      // Don't redirect on 401s for optional-auth endpoints (like GET /events)
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
+          // Session exists but server rejected it — sign out gracefully
           await supabase.auth.signOut();
-          window.location.href = '/login';
-          return new Promise(() => {}); // prevent further error handling
+          // Only redirect if this was an authenticated endpoint
+          const url = config?.url || '';
+          const authRequired = url.includes('/admin') || url.includes('/register') || url.includes('/auth');
+          if (authRequired) {
+            window.location.href = '/login';
+            return new Promise(() => {}); // prevent further error handling
+          }
         }
       } catch (_signOutError) {
         // If session cleanup fails, let the original error propagate

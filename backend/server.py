@@ -176,13 +176,14 @@ def create_refresh_token(user_id: str) -> str:
 EMERGENT_AUTH_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 
 async def get_current_user(request: Request) -> dict:
-    # Try session_token first (Google OAuth)
-    session_token = request.cookies.get("session_token")
-    if not session_token:
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            session_token = auth_header[7:]
+    # Extract token from Authorization header or cookies
+    auth_header = request.headers.get("Authorization", "")
+    bearer_token = None
+    if auth_header.startswith("Bearer "):
+        bearer_token = auth_header[7:]
 
+    # 1. Try session_token first (Google OAuth)
+    session_token = request.cookies.get("session_token") or bearer_token
     if session_token:
         session = await db.user_sessions.find_one({"session_token": session_token})
         if session:
@@ -198,12 +199,39 @@ async def get_current_user(request: Request) -> dict:
                     user.pop("password_hash", None)
                     return user
 
-    # Try JWT access_token (email/password auth)
-    token = request.cookies.get("access_token")
-    if not token:
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
+    # 2. Try Supabase JWT (frontend sends Supabase access_token as Bearer)
+    supabase_jwt_secret = os.environ.get("SUPABASE_JWT_SECRET")
+    if bearer_token and supabase_jwt_secret:
+        try:
+            supabase_payload = jwt.decode(bearer_token, supabase_jwt_secret, algorithms=["HS256"])
+            # Supabase JWTs have "role" field (anon, authenticated, service_role)
+            supabase_sub = supabase_payload.get("sub")
+            if supabase_sub and supabase_payload.get("role") in ("authenticated", "anon"):
+                # Look up user by supabase_id field in MongoDB
+                user = await db.users.find_one({"supabase_id": supabase_sub})
+                if user:
+                    user["_id"] = str(user["_id"])
+                    user.pop("password_hash", None)
+                    return user
+                # Fallback: look up by email if available in token
+                supabase_email = supabase_payload.get("email")
+                if supabase_email:
+                    user = await db.users.find_one({"email": supabase_email.lower()})
+                    if user:
+                        # Link supabase_id to this user for future lookups
+                        await db.users.update_one(
+                            {"_id": ObjectId(user["_id"])},
+                            {"$set": {"supabase_id": supabase_sub}}
+                        )
+                        user["_id"] = str(user["_id"])
+                        user.pop("password_hash", None)
+                        user["supabase_id"] = supabase_sub
+                        return user
+        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+            pass  # Not a valid Supabase token, try backend JWT next
+
+    # 3. Try backend's own JWT access_token (email/password auth)
+    token = request.cookies.get("access_token") or bearer_token
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
@@ -2136,6 +2164,19 @@ async def admin_delete_church(church_id: str, user: dict = Depends(require_admin
         raise HTTPException(status_code=404, detail="Church not found")
     return {"message": "Church deleted"}
 
+@api_router.post("/admin/churches")
+async def admin_create_church(body: ChurchCreate, user: dict = Depends(require_admin)):
+    church_doc = body.dict()
+    church_doc["created_by"] = user["_id"]
+    church_doc["status"] = "approved"
+    church_doc["followers_count"] = 0
+    church_doc["members_count"] = 0
+    church_doc["created_at"] = datetime.now(timezone.utc)
+    result = await db.churches.insert_one(church_doc)
+    church_doc["_id"] = str(result.inserted_id)
+    await log_admin_action(user["_id"], user.get("name", "Admin"), "CREATE_CHURCH", "church", str(result.inserted_id), f"Created church: {body.name}")
+    return church_doc
+
 @api_router.get("/admin/events")
 async def admin_get_events(user: dict = Depends(require_admin), skip: int = 0, limit: int = 50, search: str = ""):
     query = {}
@@ -2162,6 +2203,18 @@ async def admin_delete_event(event_id: str, user: dict = Depends(require_admin))
     await log_admin_action(user["_id"], user.get("name", "Admin"), "DELETE_EVENT", "event", event_id, f"Deleted event: {event.get('title', '') if event else ''}")
     return {"message": "Event and registrations deleted"}
 
+@api_router.post("/admin/events")
+async def admin_create_event(body: EventCreate, user: dict = Depends(require_admin)):
+    event_doc = body.dict()
+    event_doc["created_by"] = user["_id"]
+    event_doc["creator_name"] = user.get("name", "")
+    event_doc["attendees_count"] = 0
+    event_doc["created_at"] = datetime.now(timezone.utc)
+    result = await db.events.insert_one(event_doc)
+    event_doc["_id"] = str(result.inserted_id)
+    await log_admin_action(user["_id"], user.get("name", "Admin"), "CREATE_EVENT", "event", str(result.inserted_id), f"Created event: {body.title}")
+    return event_doc
+
 @api_router.get("/admin/products")
 async def admin_get_products(user: dict = Depends(require_admin), skip: int = 0, limit: int = 50, search: str = ""):
     query = {}
@@ -2184,6 +2237,17 @@ async def admin_delete_product(product_id: str, user: dict = Depends(require_adm
         raise HTTPException(status_code=404, detail="Product not found")
     await log_admin_action(user["_id"], user.get("name", "Admin"), "DELETE_PRODUCT", "product", product_id, f"Deleted product: {product.get('title', '') if product else ''}")
     return {"message": "Product deleted"}
+
+@api_router.post("/admin/products")
+async def admin_create_product(body: ProductCreate, user: dict = Depends(require_admin)):
+    product_doc = body.dict()
+    product_doc["created_by"] = user["_id"]
+    product_doc["seller_name"] = user.get("name", "")
+    product_doc["created_at"] = datetime.now(timezone.utc)
+    result = await db.products.insert_one(product_doc)
+    product_doc["_id"] = str(result.inserted_id)
+    await log_admin_action(user["_id"], user.get("name", "Admin"), "CREATE_PRODUCT", "product", str(result.inserted_id), f"Created product: {body.title}")
+    return product_doc
 
 @api_router.get("/admin/logs")
 async def admin_get_logs(user: dict = Depends(require_admin), skip: int = 0, limit: int = 50, action_type: str = "", date_from: str = "", date_to: str = ""):
