@@ -1,5 +1,8 @@
 {
+  "buildCommand": "CI=false DISABLE_ESLINT_PLUGIN=true ESLINT_NO_DEV_ERRORS=true FAST_REFRESH=false npm run build --workspace=frontend && cp -r frontend/build build",
   "outputDirectory": "build",
+  "installCommand": "npm install",
+  "framework": null,
   "rewrites": [
     {
       "source": "/api/:path*",
