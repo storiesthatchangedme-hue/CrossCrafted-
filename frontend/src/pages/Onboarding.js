@@ -297,7 +297,7 @@ const Onboarding = () => {
         setUser({ ...updatedUser, _id: updatedUser.id, email: user.email });
       }
 
-      navigate('/app/feed', { replace: true });
+      navigate('/app/churches', { replace: true });
     } catch (err) {
       setErrors({ submit: err.message || 'Failed to save. Please try again.' });
     } finally {
@@ -316,7 +316,7 @@ const Onboarding = () => {
   // ── If user already completed onboarding, redirect ──
   useEffect(() => {
     if (user && user !== false && user.onboarding_complete) {
-      navigate('/app/feed', { replace: true });
+      navigate('/app/churches', { replace: true });
     }
   }, [user, navigate]);
 

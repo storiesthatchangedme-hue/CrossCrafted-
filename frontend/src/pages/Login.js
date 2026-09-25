@@ -32,7 +32,7 @@ const Login = () => {
   // If already logged in and onboarding complete, redirect to feed
   useEffect(() => {
     if (user && user !== false && user.onboarding_complete) {
-      navigate('/app/feed', { replace: true });
+      navigate('/app/churches', { replace: true });
     } else if (user && user !== false && !user.onboarding_complete) {
       navigate('/onboarding', { replace: true });
     }

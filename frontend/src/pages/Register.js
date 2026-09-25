@@ -56,7 +56,7 @@ const Register = () => {
   // After registration or login, redirect based on onboarding status
   useEffect(() => {
     if (user && user !== false && user.onboarding_complete) {
-      navigate('/app/feed', { replace: true });
+      navigate('/app/churches', { replace: true });
     } else if (user && user !== false && !user.onboarding_complete) {
       navigate('/onboarding', { replace: true });
     }

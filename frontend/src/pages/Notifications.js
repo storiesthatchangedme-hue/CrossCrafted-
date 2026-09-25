@@ -110,7 +110,7 @@ const Notifications = () => {
       setUnreadCount(prev => Math.max(0, prev - 1));
     }
     // Navigate based on type
-    if (notif.type === 'like' || notif.type === 'comment') navigate('/app/feed');
+    if (notif.type === 'like' || notif.type === 'comment') navigate('/app/churches');
     else if (notif.type === 'follow') navigate(`/app/profile/${notif.sender_id}`);
     else if (notif.type === 'message') navigate('/app/messages');
     else if (notif.type === 'prayer_support') navigate('/app/prayer');

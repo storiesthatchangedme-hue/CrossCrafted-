@@ -55,7 +55,7 @@ const AuthCallback = () => {
       } else if (publicUser.status === 'rejected') {
         navigate('/login', { replace: true, state: { error: 'Your account has been rejected.' } });
       } else {
-        navigate('/app/feed', { replace: true });
+        navigate('/app/churches', { replace: true });
       }
     });
 

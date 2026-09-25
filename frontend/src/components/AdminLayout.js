@@ -13,7 +13,7 @@ const AdminLayout = () => {
 
   useEffect(() => {
     if (user && user.role !== 'admin') {
-      navigate('/app/feed');
+      navigate('/app/churches');
     }
   }, [user, navigate]);
 

@@ -668,7 +668,7 @@ const Explore = () => {
             {displayPosts.map((post, i) => (
               <motion.div key={post._id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
-                onClick={() => navigate('/app/feed')}
+                onClick={() => navigate('/app/churches')}
                 className="relative rounded-2xl overflow-hidden cursor-pointer group aspect-[3/4] border border-white/[0.06] group-hover:border-white/[0.15]"
                 data-testid="post-preview-card">
                 {post.image_url ? (
