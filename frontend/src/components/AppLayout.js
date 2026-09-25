@@ -62,19 +62,13 @@ const AppLayout = () => {
   useEffect(() => { setHeaderVisible(true); lastScrollY.current = 0; }, [location.pathname]);
 
   const sidebarLinks = [
-    { to: '/app/feed?tab=discover', icon: Users, label: 'Discover' },
-    { to: '/app/feed?tab=connections', icon: Heart, label: 'Matches' },
-    { to: '/app/messages', icon: MessageCircle, label: 'Messages', badge: unreadMessages },
-    { to: '/app/explore', icon: Compass, label: 'Community' },
-    { to: '/app/prayer-wall', icon: HeartHandshake, label: 'Prayer Wall' },
     { to: '/app/churches', icon: Search, label: 'Churches' },
     { to: '/app/events', icon: Calendar, label: 'Events' },
     { to: '/app/trivia', icon: Award, label: 'Bible Trivia' },
     { to: '/app/apologetics', icon: BookOpen, label: 'Apologetics' },
     { to: '/app/list-church', icon: Building2, label: 'List Your Church' },
     { to: '/app/marketplace', icon: Store, label: 'Marketplace' },
-    { to: '/app/notifications', icon: Bell, label: 'Notifications', badge: unreadNotifs },
-    { to: '/app/profile', icon: User, label: 'Profile' },
+    { to: '/app/prayer-wall', icon: HeartHandshake, label: 'Prayer Wall' },
   ];
 
   return (
@@ -174,12 +168,12 @@ const AppLayout = () => {
 
       {/* ========== MOBILE BOTTOM NAV ========== */}
       <nav className="md:hidden fixed bottom-4 left-4 right-4 z-50 rounded-[20px] bg-[#111827]/80 backdrop-blur-xl border border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.6)]" data-testid="mobile-bottom-nav">
-        <div className="flex items-center justify-around h-14 px-2">
-          <NavItem to="/app/feed?tab=discover" icon={Users} label="Discover" active={isActive('/app/feed?tab=discover')} />
-          <NavItem to="/app/feed?tab=connections" icon={Heart} label="Matches" active={isActive('/app/feed?tab=connections')} />
-          <NavItem to="/app/messages" icon={MessageCircle} label="Messages" active={isActive('/app/messages')} badge={unreadMessages} />
-          <NavItem to="/app/explore" icon={Compass} label="Community" active={isActive('/app/explore')} />
-          <NavItem to="/app/profile" icon={User} label="Profile" active={isActive('/app/profile')} />
+        <div className="flex items-center justify-around h-14 px-1">
+          <NavItem to="/app/churches" icon={Search} label="Churches" active={isActive('/app/churches')} />
+          <NavItem to="/app/trivia" icon={Award} label="Trivia" active={isActive('/app/trivia')} />
+          <NavItem to="/app/apologetics" icon={BookOpen} label="Apologetics" active={isActive('/app/apologetics')} />
+          <NavItem to="/app/list-church" icon={Building2} label="Church" active={isActive('/app/list-church')} />
+          <NavItem to="/app/marketplace" icon={Store} label="Shop" active={isActive('/app/marketplace')} />
         </div>
       </nav>
     </div>

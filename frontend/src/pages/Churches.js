@@ -36,8 +36,8 @@ const Churches = () => {
       if (filterState) params.append('state', filterState);
       if (filterLanguage) params.append('language', filterLanguage);
       if (searchQuery) params.append('search', searchQuery);
-      const { data } = await api.get('/api/churches?${params}');
-      setChurches(data);
+      const { data } = await api.get(`/api/churches?${params}`);
+      setChurches(Array.isArray(data) ? data : []);
     } catch (_) { toast.error('Failed to load'); } finally { setLoading(false); }
   }, [filterState, filterLanguage, searchQuery]);
 
@@ -57,8 +57,8 @@ const Churches = () => {
   const handleFollow = async (e, churchId, isFollowing) => {
     e.stopPropagation();
     try {
-      if (isFollowing) await api.delete('/api/churches/${churchId}/follow');
-      else await api.post('/api/churches/${churchId}/follow', {});
+      if (isFollowing) await api.delete(`/api/churches/${churchId}/follow`);
+      else await api.post(`/api/churches/${churchId}/follow`, {});
       fetchChurches();
     } catch (_) { toast.error('Follow failed'); }
   };
@@ -141,7 +141,7 @@ const Churches = () => {
       </AnimatePresence>
 
       <div className="space-y-4">
-        {churches.map((church, i) => {
+        {(Array.isArray(churches) ? churches : []).map((church, i) => {
           const isFollowing = church.followers?.includes(user?._id);
           return (
             <motion.div key={church._id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}

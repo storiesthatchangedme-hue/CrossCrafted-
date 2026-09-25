@@ -48,6 +48,8 @@ const AdminApprovals = React.lazy(() => import("@/pages/admin/AdminApprovals"));
 const AdminComments = React.lazy(() => import("@/pages/admin/AdminComments"));
 const AdminTrivia = React.lazy(() => import("@/pages/admin/AdminTrivia"));
 const AdminReports = React.lazy(() => import("@/pages/admin/AdminReports"));
+const AdminBusinesses = React.lazy(() => import("@/pages/admin/AdminBusinesses"));
+const AdminMarketplace = React.lazy(() => import("@/pages/admin/AdminMarketplace"));
 const Apologetics = React.lazy(() => import("@/pages/Apologetics"));
 const ListYourChurch = React.lazy(() => import("@/pages/ListYourChurch"));
 const ListYourBusiness = React.lazy(() => import("@/pages/ListYourBusiness"));
@@ -87,6 +89,8 @@ function AppRouter() {
         <Route path="churches" element={<AdminChurches />} />
         <Route path="events" element={<AdminEvents />} />
         <Route path="products" element={<AdminProducts />} />
+        <Route path="businesses" element={<AdminBusinesses />} />
+        <Route path="marketplace" element={<AdminMarketplace />} />
         <Route path="comments" element={<AdminComments />} />
         <Route path="trivia" element={<AdminTrivia />} />
         <Route path="logs" element={<AdminLogs />} />
@@ -100,7 +104,7 @@ function AppRouter() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="/app/feed" replace />} />
+        <Route index element={<Navigate to="/app/churches" replace />} />
         <Route path="feed" element={<SocialFeed />} />
         <Route path="explore" element={<Explore />} />
         <Route path="trivia" element={<Trivia />} />

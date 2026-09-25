@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useEffect } from 'react';
 import {
   LayoutDashboard, Users, FileText, Church, Calendar,
-  ShoppingBag, ArrowLeft, Shield, ScrollText, UserCheck, MessageCircle, HelpCircle, ShieldAlert
+  ShoppingBag, ArrowLeft, Shield, ScrollText, UserCheck, MessageCircle, HelpCircle, ShieldAlert, Building2, Store
 } from 'lucide-react';
 
 const AdminLayout = () => {
@@ -25,13 +25,15 @@ const AdminLayout = () => {
     { path: '/app/admin', icon: LayoutDashboard, label: 'Dashboard', color: '#A855F7' },
     { path: '/app/admin/approvals', icon: UserCheck, label: 'Approvals', color: '#F59E0B' },
     { path: '/app/admin/users', icon: Users, label: 'Users', color: '#3B82F6' },
-    { path: '/app/admin/reports', icon: ShieldAlert, label: 'Reports', color: '#EF4444' },
-    { path: '/app/admin/posts', icon: FileText, label: 'Posts', color: '#EC4899' },
     { path: '/app/admin/churches', icon: Church, label: 'Churches', color: '#10B981' },
     { path: '/app/admin/events', icon: Calendar, label: 'Events', color: '#F59E0B' },
-    { path: '/app/admin/products', icon: ShoppingBag, label: 'Products', color: '#8B5CF6' },
-    { path: '/app/admin/comments', icon: MessageCircle, label: 'Comments', color: '#06B6D4' },
+    { path: '/app/admin/businesses', icon: Building2, label: 'Businesses', color: '#06B6D4' },
+    { path: '/app/admin/marketplace', icon: Store, label: 'Marketplace', color: '#8B5CF6' },
+    { path: '/app/admin/products', icon: ShoppingBag, label: 'Products', color: '#EC4899' },
     { path: '/app/admin/trivia', icon: HelpCircle, label: 'Trivia', color: '#FBBF24' },
+    { path: '/app/admin/posts', icon: FileText, label: 'Posts', color: '#EC4899' },
+    { path: '/app/admin/reports', icon: ShieldAlert, label: 'Reports', color: '#EF4444' },
+    { path: '/app/admin/comments', icon: MessageCircle, label: 'Comments', color: '#06B6D4' },
     { path: '/app/admin/logs', icon: ScrollText, label: 'Activity', color: '#F97316' },
   ];
 
@@ -49,7 +51,7 @@ const AdminLayout = () => {
             </h1>
           </div>
           <Link
-            to="/app/feed"
+            to="/app/churches"
             className="flex items-center gap-2 px-4 py-2 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] rounded-full text-sm font-medium transition-all"
             data-testid="admin-back-to-app"
           >

@@ -47,14 +47,14 @@ const PublicNav = () => {
         </div>
 
         <div className="hidden md:flex items-center gap-3">
-          <Link to="/login" data-testid="nav-login-button">
+          <Link to="/app/churches" data-testid="nav-login-button">
             <button className="px-5 py-2.5 rounded-xl text-sm font-semibold text-[#94A3B8] hover:text-white border border-white/[0.08] hover:border-white/[0.15] transition-all">
-              Open App
+              Explore
             </button>
           </Link>
-          <Link to="/register" data-testid="nav-register-button">
+          <Link to="/app/trivia" data-testid="nav-register-button">
             <button className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-950 transition-all hover:-translate-y-px bg-[#F39B9B] hover:bg-[#E27B7B] shadow-lg shadow-[#F39B9B]/10">
-              Join crosscrafted
+              Bible Trivia
             </button>
           </Link>
         </div>
@@ -84,12 +84,12 @@ const PublicNav = () => {
                 </Link>
               ))}
               <div className="flex gap-3 pt-3">
-                <Link to="/login" className="flex-1" onClick={() => setMobileOpen(false)}>
-                  <button className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-[#94A3B8] border border-white/[0.08]">Open App</button>
+                <Link to="/app/churches" className="flex-1" onClick={() => setMobileOpen(false)}>
+                  <button className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-[#94A3B8] border border-white/[0.08]">Explore</button>
                 </Link>
-                <Link to="/register" className="flex-1" onClick={() => setMobileOpen(false)}>
+                <Link to="/app/trivia" className="flex-1" onClick={() => setMobileOpen(false)}>
                   <button className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-slate-950 bg-[#F39B9B] hover:bg-[#E27B7B]"
-                    >Join</button>
+                    >Trivia</button>
                 </Link>
               </div>
             </div>
