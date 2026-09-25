@@ -44,9 +44,11 @@ CREATE TABLE IF NOT EXISTS public.users (
     alcohol TEXT,
     occupation TEXT,
     completion_percentage INTEGER DEFAULT 0,
+    onboarding_complete BOOLEAN DEFAULT false,
     followers TEXT[] DEFAULT '{}',
     following TEXT[] DEFAULT '{}',
     saved_posts TEXT[] DEFAULT '{}',
+    saved_events TEXT[] DEFAULT '{}',
     completed_safe_intro BOOLEAN DEFAULT false,
     password_hash TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -189,9 +191,16 @@ CREATE TABLE IF NOT EXISTS public.events (
     title TEXT NOT NULL,
     description TEXT DEFAULT '',
     date TIMESTAMP WITH TIME ZONE NOT NULL,
+    end_date TIMESTAMP WITH TIME ZONE,
     location TEXT NOT NULL,
+    category TEXT DEFAULT 'worship',
+    is_online BOOLEAN DEFAULT false,
+    stream_url TEXT DEFAULT '',
+    is_free BOOLEAN DEFAULT true,
     price DECIMAL(10,2) DEFAULT 0,
+    max_attendees INTEGER,
     cover_image TEXT DEFAULT '',
+    tags TEXT[] DEFAULT '{}',
     church_id UUID REFERENCES public.churches(id) ON DELETE SET NULL,
     church_name TEXT DEFAULT '',
     state TEXT DEFAULT '',
@@ -203,6 +212,7 @@ CREATE TABLE IF NOT EXISTS public.events (
 
 CREATE INDEX idx_events_date ON public.events(date);
 CREATE INDEX idx_events_state ON public.events(state);
+CREATE INDEX idx_events_category ON public.events(category);
 CREATE INDEX idx_events_church_id ON public.events(church_id);
 CREATE INDEX idx_events_created_by ON public.events(created_by);
 CREATE INDEX idx_events_legacy_id ON public.events(legacy_id);
@@ -410,6 +420,117 @@ CREATE TABLE IF NOT EXISTS public.recent_searches (
 CREATE INDEX idx_recent_searches_user ON public.recent_searches(user_id, created_at DESC);
 
 -- ═══════════════════════════════════════════════════════════
+-- WISHLIST
+-- ═══════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS public.wishlist (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+    product_id UUID REFERENCES public.marketplace_items(id) ON DELETE CASCADE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, product_id)
+);
+
+CREATE INDEX idx_wishlist_user ON public.wishlist(user_id);
+
+-- ═══════════════════════════════════════════════════════════
+-- FEATURE FLAGS
+-- ═══════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS public.feature_flags (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    key TEXT UNIQUE NOT NULL,
+    enabled BOOLEAN DEFAULT false,
+    description TEXT DEFAULT '',
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ═══════════════════════════════════════════════════════════
+-- ANNOUNCEMENTS
+-- ═══════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS public.announcements (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    type TEXT DEFAULT 'info',
+    is_active BOOLEAN DEFAULT true,
+    created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    expires_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_announcements_active ON public.announcements(is_active);
+
+-- ═══════════════════════════════════════════════════════════
+-- SMALL GROUPS
+-- ═══════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS public.small_groups (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    category TEXT DEFAULT 'bible-study',
+    meeting_day TEXT DEFAULT '',
+    meeting_time TEXT DEFAULT '',
+    location TEXT DEFAULT '',
+    is_online BOOLEAN DEFAULT false,
+    stream_url TEXT DEFAULT '',
+    state TEXT DEFAULT '',
+    city TEXT DEFAULT '',
+    languages TEXT[] DEFAULT '{}',
+    max_members INTEGER,
+    cover_image TEXT DEFAULT '',
+    leader_id UUID REFERENCES public.users(id) ON DELETE SET NULL NOT NULL,
+    church_id UUID REFERENCES public.churches(id) ON DELETE SET NULL,
+    members UUID[] DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_small_groups_category ON public.small_groups(category);
+CREATE INDEX idx_small_groups_leader ON public.small_groups(leader_id);
+
+-- ═══════════════════════════════════════════════════════════
+-- BIBLE READING PLANS
+-- ═══════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS public.bible_plans (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    duration_days INTEGER NOT NULL,
+    category TEXT DEFAULT 'devotional',
+    cover_image TEXT DEFAULT '',
+    is_featured BOOLEAN DEFAULT false,
+    created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.bible_plan_days (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    plan_id UUID REFERENCES public.bible_plans(id) ON DELETE CASCADE NOT NULL,
+    day_number INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    reading TEXT DEFAULT '',
+    reflection TEXT DEFAULT '',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_bible_plan_days_plan ON public.bible_plan_days(plan_id, day_number);
+
+CREATE TABLE IF NOT EXISTS public.bible_plan_enrollments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+    plan_id UUID REFERENCES public.bible_plans(id) ON DELETE CASCADE NOT NULL,
+    current_day INTEGER DEFAULT 1,
+    completed_days INTEGER[] DEFAULT '{}',
+    enrolled_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, plan_id)
+);
+
+CREATE INDEX idx_bible_plan_enrollments_user ON public.bible_plan_enrollments(user_id);
+
+-- ═══════════════════════════════════════════════════════════
 -- STORAGE BUCKETS (created via Supabase Dashboard or SQL)
 -- ═══════════════════════════════════════════════════════════
 -- Run these via Supabase SQL to create storage buckets:
@@ -449,6 +570,13 @@ ALTER TABLE public.user_blocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bff_swipes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bff_connections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.recent_searches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.wishlist ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.feature_flags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.small_groups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bible_plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bible_plan_days ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bible_plan_enrollments ENABLE ROW LEVEL SECURITY;
 
 -- Users: everyone can view, only self can update
 CREATE POLICY "Users can view all users" ON public.users FOR SELECT USING (true);
@@ -507,9 +635,31 @@ CREATE POLICY "Users can view own scores" ON public.trivia_scores FOR SELECT USI
 CREATE POLICY "Users can view own swipes" ON public.bff_swipes FOR SELECT USING (auth.uid() = swiper_id);
 CREATE POLICY "Users can create swipes" ON public.bff_swipes FOR INSERT WITH CHECK (auth.uid() = swiper_id);
 
+-- Wishlist
+CREATE POLICY "Users can view own wishlist" ON public.wishlist FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage own wishlist" ON public.wishlist FOR ALL USING (auth.uid() = user_id);
+
+-- Feature flags: anyone can read
+CREATE POLICY "Anyone can view feature flags" ON public.feature_flags FOR SELECT USING (true);
+
+-- Announcements: anyone can view active
+CREATE POLICY "Anyone can view announcements" ON public.announcements FOR SELECT USING (is_active = true);
+
+-- Small groups: anyone can view, authenticated can create
+CREATE POLICY "Anyone can view small groups" ON public.small_groups FOR SELECT USING (true);
+CREATE POLICY "Authenticated users can create small groups" ON public.small_groups FOR INSERT WITH CHECK (auth.uid() = leader_id);
+
+-- Bible plans: anyone can view
+CREATE POLICY "Anyone can view bible plans" ON public.bible_plans FOR SELECT USING (true);
+CREATE POLICY "Anyone can view bible plan days" ON public.bible_plan_days FOR SELECT USING (true);
+CREATE POLICY "Users can view own enrollments" ON public.bible_plan_enrollments FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage own enrollments" ON public.bible_plan_enrollments FOR ALL USING (auth.uid() = user_id);
+
 -- Enable realtime for key tables
 ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.prayers;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.posts;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.comments;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.events;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.announcements;
