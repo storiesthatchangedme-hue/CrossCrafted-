@@ -24,8 +24,10 @@ const PORT = process.env.PORT || 3000;
 // Supabase Database Layer
 // ═══════════════════════════════════════════════════════════
 let db;
+let isSupabase = false;
 try {
   db = require('./supabase-db');
+  isSupabase = !!db;
   console.log('[DB] Connected to Supabase PostgreSQL');
 } catch (err) {
   console.warn('[DB] Supabase not configured, falling back to in-memory storage');
@@ -159,6 +161,18 @@ if (!db) db = {
   reports: []
 };
 
+// DB wrapper: provides .isSupabase flag and proxies all table access to `db`
+const DB = new Proxy(db, {
+  get(target, prop) {
+    if (prop === 'isSupabase') return isSupabase;
+    return target[prop];
+  },
+  set(target, prop, value) {
+    target[prop] = value;
+    return true;
+  },
+});
+
 // --- Supabase Synchronization Helpers ---
 // Legacy in-memory fallback (used when Supabase is not configured)
 function loadDbLegacy() {
@@ -252,7 +266,7 @@ function createLegacyProxy(table, supabaseModule) {
         sort: (fn) => { if (Array.isArray(DB[table])) DB[table].sort(fn); },
         unshift: (item) => { console.warn(`[Proxy] .unshift() not supported on ${table} — use db.${table}.create()`); },
         push: (item) => { console.warn(`[Proxy] .push() not supported on ${table} — use db.${table}.create()`); },
-      };
+      });
     },
     set(target, prop, value) {
       if (prop === 'length' || prop === 'prototype') return true;
@@ -1178,7 +1192,7 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
 });
 
 // 2. Auth Register
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   const { email, username, password, name, role, state, city, languages, faith_belief, faith_journey, church_member } = req.body;
   if (!email || !password || !username) {
     return res.status(400).json({ detail: 'Email, password, and username are required' });
@@ -1233,7 +1247,7 @@ app.post('/api/auth/register', (req, res) => {
 });
 
 // 3. Auth Login
-app.post('/api/auth/login', authLimiter, (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ detail: 'Email and password are required' });
@@ -1943,6 +1957,7 @@ app.post('/api/upload/finalize/:upload_id', uploadLimiter, async (req, res) => {
     } catch (uploadErr) {
       console.error('[Upload] Supabase finalize failed:', uploadErr.message);
     }
+  }
   const images = [
     'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&q=80',
     'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80',
