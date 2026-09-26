@@ -16,6 +16,8 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   console.warn('[Supabase DB] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.');
   console.warn('[Supabase DB] Falling back to in-memory storage.');
+  module.exports = null;
+  return;
 }
 
 // Admin client bypasses RLS
