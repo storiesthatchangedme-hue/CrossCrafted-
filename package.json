@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "node server.js",
-    "build": "CI=false DISABLE_ESLINT_PLUGIN=true ESLINT_NO_DEV_ERRORS=true FAST_REFRESH=false npm run build --workspace=frontend && cp -r frontend/build build",
+    "build": "cd frontend && CI=false DISABLE_ESLINT_PLUGIN=true ESLINT_NO_DEV_ERRORS=true FAST_REFRESH=false npx craco build",
     "lint": "echo 'Skipping lint check...'"
   },
   "dependencies": {
